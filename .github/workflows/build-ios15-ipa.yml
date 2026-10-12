@@ -62,6 +62,7 @@ jobs:
       - name: Build Minis.app (unsigned, iOS 15.0 deployment target)
         run: |
           set -euo pipefail
+          test -f src/ios/Configs/ProviderCustomization.xcconfig || cp src/ios/Configs/ProviderCustomization.xcconfig.example src/ios/Configs/ProviderCustomization.xcconfig
           xcodebuild \
             -project src/ios/Minis.xcodeproj \
             -scheme Minis \
