@@ -1,4 +1,4 @@
-﻿import ActivityKit
+import ActivityKit
 import AVFoundation
 import Combine
 import CoreLocation
@@ -20,8 +20,8 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     @Published private(set) var isActive = false
 
     /// [T-keepalive-survival-tier] Background-survival capability shown in
-    /// Settings 鈫?Background 鈫?Status. Independent of whether a task is
-    /// running right now 鈥?it answers "if the app backgrounds at this moment,
+    /// Settings → Background → Status. Independent of whether a task is
+    /// running right now — it answers "if the app backgrounds at this moment,
     /// how long can it keep working": every iOS app gets only the standard
     /// ~30s grace window unless one of the long-lived legs is enabled.
     enum BackgroundSurvivalTier: Equatable {
@@ -49,11 +49,11 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         didSet {
             UserDefaults.standard.set(enhancedBackgroundEnabled, forKey: "enhancedBackgroundExecution")
             // Turning on the master switch also opts the user into
-            // Background Speak 鈥?without it, TTS narration cuts off the
+            // Background Speak — without it, TTS narration cuts off the
             // instant the app backgrounds, which defeats the typical
             // "enable enhanced background so my long task can keep
             // narrating" intent users have when flipping this from the
-            // interruption banner. Off 鈫?on only; flipping the master
+            // interruption banner. Off → on only; flipping the master
             // back off leaves Background Speak alone so the user's
             // own choice isn't clobbered (T-enhanced-bg-auto-speak).
             if enhancedBackgroundEnabled && !backgroundSpeakEnabled {
@@ -67,7 +67,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     }
 
     /// [T-live-activity-toggle] User switch for the agent-progress Live
-    /// Activity (Lock Screen / Dynamic Island). Defaults to ON 鈥?the key is
+    /// Activity (Lock Screen / Dynamic Island). Defaults to ON — the key is
     /// absent until the user first flips it, so read via object(forKey:).
     /// AgentLiveActivityManager gates its start/update entry points on this;
     /// flipping OFF also tears down any currently-displayed activity so the
@@ -93,7 +93,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     /// background. The master switch alone is not enough: silent-audio
     /// keep-alive (the mechanism that prevents background-task expiry) only
     /// plays when Background Speak is also on (see `evaluateSilentAudio`).
-    /// So "master on but Background Speak off" still gets interrupted 鈥?and
+    /// So "master on but Background Speak off" still gets interrupted — and
     /// must be treated as "enhanced background NOT effective" everywhere we
     /// decide whether to count interruptions / surface the reminder banner.
     var enhancedBackgroundEffective: Bool {
@@ -112,13 +112,13 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
 
     /// [T-ios-live-activity-privacy-mode] When enabled, the Live Activity, the
     /// Dynamic Island and background task notifications stop surfacing session
-    /// content 鈥?no session title, tool status/icon or reply summary. They
+    /// content — no session title, tool status/icon or reply summary. They
     /// degrade to a neutral progress report: completed/total task count plus the
     /// elapsed timer.
     ///
     /// Deliberately NOT related to the pre-existing `envvars.privacyMode`
     /// (ConfigRegistry / EnvVarPrivacyStore), which masks environment-variable
-    /// values in the config UI 鈥?different concept, hence the distinct
+    /// values in the config UI — different concept, hence the distinct
     /// `liveActivityPrivacyMode` key to avoid conflation.
     ///
     /// Defaults to OFF so existing installs keep their current behavior.
@@ -129,17 +129,17 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
 
     // MARK: - Speech Settings
 
-    /// Speech rate (0.0鈥?.0). Default is AVSpeechUtteranceDefaultSpeechRate (0.5).
+    /// Speech rate (0.0–1.0). Default is AVSpeechUtteranceDefaultSpeechRate (0.5).
     @Published var speechRate: Float = UserDefaults.standard.object(forKey: "speechRate") as? Float ?? AVSpeechUtteranceDefaultSpeechRate {
         didSet { UserDefaults.standard.set(speechRate, forKey: "speechRate") }
     }
 
-    /// Pitch multiplier (0.5鈥?.0). Default is 1.0.
+    /// Pitch multiplier (0.5–2.0). Default is 1.0.
     @Published var speechPitch: Float = UserDefaults.standard.object(forKey: "speechPitch") as? Float ?? 1.0 {
         didSet { UserDefaults.standard.set(speechPitch, forKey: "speechPitch") }
     }
 
-    /// Volume (0.0鈥?.0). Default is 1.0.
+    /// Volume (0.0–1.0). Default is 1.0.
     @Published var speechVolume: Float = UserDefaults.standard.object(forKey: "speechVolume") as? Float ?? 1.0 {
         didSet { UserDefaults.standard.set(speechVolume, forKey: "speechVolume") }
     }
@@ -180,7 +180,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     /// [T-ios-scene-create-watchdog-corelocation] `lazy`, not a stored `let`:
     /// allocating a CLLocationManager opens a connection to locationd, so a
     /// plain stored property would drag that IPC into this singleton's `init()`
-    /// 鈥?i.e. into whatever thread first touches `.shared`. Created on first
+    /// — i.e. into whatever thread first touches `.shared`. Created on first
     /// real use (from `configureLocationManager()` onward), never at init.
     private lazy var locationManager = CLLocationManager()
     private var locationUpdating = false
@@ -196,7 +196,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     /// [T-ios-bg-location-arm-delay] Gate for background location keep-alive.
     /// Location updates + the CLBackgroundActivitySession only start once this
     /// is true, which happens `backgroundLocationArmDelay` seconds AFTER the app
-    /// enters the background 鈥?so a brief background blip (or normal foreground
+    /// enters the background — so a brief background blip (or normal foreground
     /// use) never spins up location at all. Reset to false on foreground return.
     private var backgroundLocationArmed = false
     private var backgroundLocationArmTimer: Timer?
@@ -206,9 +206,9 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     /// [T-ios-scenephase-active-sigkill] True between a `willEnterForeground`
     /// notification and its deferred (yielded) handler running. Replaces the
     /// `applicationState != .background` guard, which was unreliable because
-    /// `.inactive` is ambiguous 鈥?it can mean "entering foreground" OR "entering
+    /// `.inactive` is ambiguous — it can mean "entering foreground" OR "entering
     /// background". A synchronous `didEnterBackground` clears this flag, so a
-    /// rapid bg鈫抐g鈫抌g blip cancels the in-flight foreground work cleanly. Also
+    /// rapid bg→fg→bg blip cancels the in-flight foreground work cleanly. Also
     /// gates `reevaluate`'s @Published writes off the transition tick.
     private var pendingForegroundTransition = false
 
@@ -218,7 +218,8 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     private var silentAudioActive = false
 
     /// [T-bg-keepalive-debounce] Pending debounced stop of silent audio. When
-    /// the app receives a transient `foreground` signal (e.g. a call ending 鈫?    /// Minis briefly foregrounds 鈫?immediately backgrounds again), stopping the
+    /// the app receives a transient `foreground` signal (e.g. a call ending →
+    /// Minis briefly foregrounds → immediately backgrounds again), stopping the
     /// keep-alive audio synchronously releases the audio session right before
     /// we go back to background, and iOS then kills the process. While sessions
     /// are active we instead DELAY the stop; if a `background` signal arrives
@@ -248,8 +249,8 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     private var idleGraceTimer: DispatchSourceTimer?
     /// When the current idle grace was armed, for log/diagnostic elapsed times.
     private var idleGraceStartedAt: Date?
-    /// How long keep-alive survives after going idle. Distinct from 鈥?and much
-    /// longer than 鈥?`silentAudioStopDebounce` (1.5s), which covers a transient
+    /// How long keep-alive survives after going idle. Distinct from — and much
+    /// longer than — `silentAudioStopDebounce` (1.5s), which covers a transient
     /// foreground blip while sessions are STILL active. The two never overlap.
     private static let idleGracePeriod: TimeInterval = 60.0
 
@@ -297,7 +298,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         let bgTask = isActive
         let remaining = UIApplication.shared.backgroundTimeRemaining
         let remainingStr = remaining > 99999 ? "unlimited" : String(format: "%.0fs", remaining)
-        logger.info("[BKA][Lifecycle] 鈫?\(transition) | isActive=\(self.isActive) bg=\(self.appIsInBackground) sessions=\(sessions) shellRunning=\(shellRunning) bgTask=\(bgTask) bgTaskRemaining=\(remainingStr) silentAudioPlaying=\(self.silentAudioIsPlaying) suspendCount=\(self.silentAudioSuspendCount) bgSpeak=\(self.backgroundSpeakEnabled) stopDebounceTimer=\(self.debounceTimerDescription())")
+        logger.info("[BKA][Lifecycle] → \(transition) | isActive=\(self.isActive) bg=\(self.appIsInBackground) sessions=\(sessions) shellRunning=\(shellRunning) bgTask=\(bgTask) bgTaskRemaining=\(remainingStr) silentAudioPlaying=\(self.silentAudioIsPlaying) suspendCount=\(self.silentAudioSuspendCount) bgSpeak=\(self.backgroundSpeakEnabled) stopDebounceTimer=\(self.debounceTimerDescription())")
     }
 
     /// When > 0, silent audio is suspended so media playback gets full volume.
@@ -310,7 +311,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     func suspendSilentAudioForMedia(caller: String = #function) {
         let before = silentAudioSuspendCount
         silentAudioSuspendCount += 1
-        logger.info("[BackgroundKeepAlive] suspendSilentAudioForMedia: count \(before) 鈫?\(self.silentAudioSuspendCount) caller=\(caller)")
+        logger.info("[BackgroundKeepAlive] suspendSilentAudioForMedia: count \(before) → \(self.silentAudioSuspendCount) caller=\(caller)")
         if silentAudioSuspendCount == 1 && silentAudioActive {
             stopSilentAudio()
         }
@@ -321,15 +322,15 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     func resumeSilentAudioForMedia(caller: String = #function) {
         let before = silentAudioSuspendCount
         silentAudioSuspendCount = max(0, silentAudioSuspendCount - 1)
-        logger.info("[BackgroundKeepAlive] resumeSilentAudioForMedia: count \(before) 鈫?\(self.silentAudioSuspendCount) caller=\(caller)")
+        logger.info("[BackgroundKeepAlive] resumeSilentAudioForMedia: count \(before) → \(self.silentAudioSuspendCount) caller=\(caller)")
         if silentAudioSuspendCount == 0 {
             evaluateSilentAudio(caller: "resumeMedia")
         }
     }
 
     // [T-ios-scene-create-watchdog-corelocation] `init()` deliberately does NO
-    // CoreLocation work. Every CLLocationManager touch 鈥?the allocation itself
-    // and `authorizationStatus` 鈥?is a synchronous XPC round-trip to locationd.
+    // CoreLocation work. Every CLLocationManager touch — the allocation itself
+    // and `authorizationStatus` — is a synchronous XPC round-trip to locationd.
     // This is a `static let` singleton, so its init runs inside a dispatch_once
     // on whichever thread first reads `.shared`; that turned out to be the main
     // thread during SwiftUI's scene-create body evaluation, where a slow
@@ -354,7 +355,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     /// without having necessarily gone through `setup()` first. Safe to call
     /// from a settings screen (the user is deep in the app by then, nowhere near
     /// the scene-create watchdog window) but NEVER from a view-body/init path
-    /// that can run during launch 鈥?this performs synchronous locationd IPC.
+    /// that can run during launch — this performs synchronous locationd IPC.
     func refreshLocationAuthStatus() {
         locationAuthStatus = locationManager.authorizationStatus
     }
@@ -386,13 +387,14 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         // [T-ish-bg-cpu-governor] Background LAUNCH coverage: a process
         // relaunched directly into the background (RunningBoard after-life,
         // push/location wake) never receives didEnterBackgroundNotification,
-        // so the governor sink below would leave background CPU unguarded 鈥?        // exactly the state a post-kill relaunch resumes into. Arm it here
+        // so the governor sink below would leave background CPU unguarded —
+        // exactly the state a post-kill relaunch resumes into. Arm it here
         // when setup finds the app already backgrounded (begin is idempotent;
         // a later real didEnterBackground is a no-op).
         if UIApplication.shared.applicationState == .background {
             appIsInBackground = true
             ISHKernel.shared.beginBackgroundCPUGovernor()
-            logger.info("[BKA] launched in background 鈥?iSH CPU governor armed at setup")
+            logger.info("[BKA] launched in background — iSH CPU governor armed at setup")
         }
 
         // Observe app lifecycle
@@ -401,21 +403,21 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             .sink { [weak self] _ in
                 guard let self else { return }
                 // [T-ios-scenephase-active-sigkill] Cancel any in-flight
-                // foreground transition: a bg鈫抐g鈫抌g blip must not let the
+                // foreground transition: a bg→fg→bg blip must not let the
                 // deferred willEnterForeground handler flip appIsInBackground.
                 self.pendingForegroundTransition = false
                 self.appIsInBackground = true
                 // [T-ish-bg-cpu-governor] Closed-loop governor replaces the
                 // old fixed 80% duty cycle (which sat exactly on the iOS
-                // background kill line and still measured 91% 鈥?see
+                // background kill line and still measured 91% — see
                 // docs/internal/ish-bg-cpu-governor-design.md).
                 ISHKernel.shared.beginBackgroundCPUGovernor()
                 logger.info("[BKA] iSH background CPU governor STARTED")
                 self.logLifecycleSnapshot("Background")
                 // [T-ios-bg-location-arm-delay] Don't start location keep-alive
-                // immediately on backgrounding 鈥?arm it after a delay so a brief
+                // immediately on backgrounding — arm it after a delay so a brief
                 // bg blip never spins up location. evaluateLocationUpdates() runs
-                // inside scheduleBackgroundLocationArming() once disarmed 鈫?armed.
+                // inside scheduleBackgroundLocationArming() once disarmed → armed.
                 self.scheduleBackgroundLocationArming()
                 self.evaluateSilentAudio(caller: "didEnterBackground")
             }
@@ -430,11 +432,11 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
                 // off the synchronous foreground-notification delivery. Flipping
                 // appIsInBackground + evaluateSilentAudio triggers objectWillChange
                 // on BackgroundKeepAliveManager, which invalidates any SwiftUI view
-                // observing it 鈥?during the same tick as the foreground view-graph
+                // observing it — during the same tick as the foreground view-graph
                 // transition. Yielding first avoids the overlap.
                 Task { @MainActor in
                     await Task.yield()
-                    // Guard against rapid bg鈫抐g鈫抌g cycling: if didEnterBackground
+                    // Guard against rapid bg→fg→bg cycling: if didEnterBackground
                     // fired between the notification and this yield it cleared the
                     // flag, so don't flip appIsInBackground. Uses a self-maintained
                     // flag rather than applicationState because `.inactive` is
@@ -447,7 +449,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
                     logger.info("[BKA] iSH background CPU governor STOPPED (foreground)")
                     self.logLifecycleSnapshot("Foreground")
                     // [T-ios-bg-location-arm-delay] Unified location-state
-                    // cleanup on every foreground return 鈥?disarms, tears down
+                    // cleanup on every foreground return — disarms, tears down
                     // our own session/timer, and retracts any orphaned session
                     // left pinned in the Dynamic Island (force-kill / crash).
                     self.cleanupLocationStateOnForeground()
@@ -477,7 +479,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         //
         // [T-scheduled-bka-keepalive] The job registry is a THIRD input. A
         // conversation that armed a scheduled job leaves `activeSessions` as
-        // soon as its turn ends, but it is not finished 鈥?it is waiting to be
+        // soon as its turn ends, but it is not finished — it is waiting to be
         // woken. Without this the app could be suspended between arming and
         // firing, and ScheduledJobRunner drives fires from an in-process
         // Task/sleep, so a suspended process never fires at all.
@@ -561,7 +563,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
                     self.lastAudioInterruptionAt = Date()
                     let wasSuspended = (note.userInfo?[AVAudioSessionInterruptionReasonKey] as? UInt)
                         == AVAudioSession.InterruptionReason.appWasSuspended.rawValue
-                    logger.info("[BKA][Interrupt] began 鈥?appWasSuspended=\(wasSuspended) wasPlaying=\(self.silentAudioIsPlaying)")
+                    logger.info("[BKA][Interrupt] began — appWasSuspended=\(wasSuspended) wasPlaying=\(self.silentAudioIsPlaying)")
                     self.recordBKAEvent("Interrupt began")
                 case .ended:
                     let opts = (note.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt).map {
@@ -570,7 +572,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
                     let shouldResume = opts?.contains(.shouldResume) ?? false
                     self.lastAudioInterruption = "ended"
                     self.lastAudioInterruptionAt = Date()
-                    logger.info("[BKA][Interrupt] ended 鈥?shouldResume=\(shouldResume) sessions=\(SessionActivityTracker.shared.activeSessions.count) bg=\(self.appIsInBackground)")
+                    logger.info("[BKA][Interrupt] ended — shouldResume=\(shouldResume) sessions=\(SessionActivityTracker.shared.activeSessions.count) bg=\(self.appIsInBackground)")
                     // 0.5s grace so the foreign session fully releases before we
                     // re-acquire .playback.
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
@@ -629,10 +631,10 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         guard wantsKeepAlive else { return }
 
         // If we think audio is active but the engine isn't actually running, iOS
-        // pulled the session out from under us 鈥?tear down and restart.
+        // pulled the session out from under us — tear down and restart.
         let engineRunning = audioEngine?.isRunning ?? false
         if silentAudioActive && !engineRunning {
-            logger.warning("[BKA][\(source)] silentAudioActive but engine NOT running 鈥?session reclaimed, restarting")
+            logger.warning("[BKA][\(source)] silentAudioActive but engine NOT running — session reclaimed, restarting")
             recordBKAEvent("Session reclaimed (\(source))")
             silentPlayerNode?.stop()
             audioEngine?.stop()
@@ -642,9 +644,9 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             cancelPendingSilentAudioStop(reason: "\(source) reclaim")
             startSilentAudio(reason: "\(source)Reclaim")
         } else if !silentAudioActive {
-            // Should be playing but isn't 鈥?re-evaluate (also covers a stale
+            // Should be playing but isn't — re-evaluate (also covers a stale
             // pending stop from a prior foreground blip).
-            logger.info("[BKA][\(source)] keep-alive wanted but not playing 鈥?re-evaluating")
+            logger.info("[BKA][\(source)] keep-alive wanted but not playing — re-evaluating")
             cancelPendingSilentAudioStop(reason: "\(source) not playing")
             evaluateSilentAudio(caller: source)
         }
@@ -656,7 +658,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     /// from restarting it.
     private func handleAudioInterruptionEnded() {
         let sessionCount = SessionActivityTracker.shared.activeSessions.count
-        logger.info("[BackgroundKeepAlive] Audio session interruption ended 鈥?bg=\(self.appIsInBackground) sessions=\(sessionCount) playing=\(self.silentAudioActive)")
+        logger.info("[BackgroundKeepAlive] Audio session interruption ended — bg=\(self.appIsInBackground) sessions=\(sessionCount) playing=\(self.silentAudioActive)")
         // The engine may have been stopped silently by iOS while we still
         // believe `silentAudioActive == true`, which would block
         // `evaluateSilentAudio` from restarting it. Tear down the stale engine
@@ -694,7 +696,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     /// `applicationWillTerminate` isn't guaranteed on force-kill, so the cold-start
     /// + foreground `retractOrphanedLocationSession(...)` paths are the backstop.
     func prepareForTermination() {
-        logger.info("[BackgroundKeepAlive] prepareForTermination 鈥?stopping location session + Live Activity")
+        logger.info("[BackgroundKeepAlive] prepareForTermination — stopping location session + Live Activity")
         // [T-ios-bg-idle-grace] Never carry a pending grace timer into termination.
         cancelIdleGrace(reason: "prepareForTermination")
         disarmBackgroundLocation()
@@ -731,14 +733,15 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             let lon = Self.maskCoordinate(loc.coordinate.longitude)
             Task { @MainActor in
                 logger.info("[BackgroundKeepAlive] Location update: (\(lat), \(lon)) accuracy=\(loc.horizontalAccuracy)m")
-                // Piggyback Live Activity update on location callback 鈥?                // Timer may be suspended in background, but location callbacks keep firing.
+                // Piggyback Live Activity update on location callback —
+                // Timer may be suspended in background, but location callbacks keep firing.
                 self.updateLiveActivityIfNeeded(source: "location")
             }
         }
     }
 
     /// Mask a coordinate for privacy: keep first 2 and last 1 digits, replace middle with "..."
-    /// e.g. 39.9042 鈫?"39...2", 116.4074 鈫?"11...4"
+    /// e.g. 39.9042 → "39...2", 116.4074 → "11...4"
     nonisolated private static func maskCoordinate(_ value: Double) -> String {
         let s = String(format: "%.4f", value)
         guard s.count > 3 else { return s }
@@ -757,7 +760,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         // [T-ios-scenephase-active-sigkill] If we're mid foreground transition
         // (between willEnterForeground and its deferred yield), defer this
         // reevaluation. It writes @Published isActive; doing so on the
-        // transition tick overlaps the SwiftUI view-graph rebuild 鈫?potential
+        // transition tick overlaps the SwiftUI view-graph rebuild → potential
         // SIGKILL (same family as the 2026-06-19 mid-request crash).
         if pendingForegroundTransition {
             Task { @MainActor in
@@ -774,7 +777,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         let sessions = sessions.union(awaitingScheduled)
         let shouldBeActive = !sessions.isEmpty && enabled
         let sessionList = sessions.prefix(5).joined(separator: ",")
-        // [T-ios-log-noise-reduction] INFO鈫扗EBUG: reevaluate runs on every
+        // [T-ios-log-noise-reduction] INFO→DEBUG: reevaluate runs on every
         // session-set / toggle change and was ~482 lines/day even when nothing
         // transitioned. The actual state CHANGES (Activating / Deactivating
         // below) keep their INFO level, so production logs still show the
@@ -796,7 +799,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             // [T-ios-live-activity-soft-finish] STOP LOCATION FIRST, fully, before
             // touching the Live Activity. The old order (end Live Activity, then
             // tear down location) let the probe-retract race surface a "ghost"
-            // location arrow right as the task ended 鈥?it appeared and couldn't be
+            // location arrow right as the task ended — it appeared and couldn't be
             // dismissed even though nothing was locating. Quiescing location first
             // closes that window. [T-ios-bgactivitysession-leak]
             disarmBackgroundLocation()
@@ -816,7 +819,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     /// Update the app-icon badge so it reflects the live count of
     /// running agent sessions while the app is in the background. When
     /// the user has turned the task-notifications toggle off, the badge
-    /// is forced to 0 鈥?Apple HIG treats badge as a notification
+    /// is forced to 0 — Apple HIG treats badge as a notification
     /// affordance, so it inherits that gate. Foreground transitions
     /// clear the badge separately in `MinisApp.handleScenePhaseChange`.
     func refreshActiveTaskBadge() {
@@ -851,9 +854,9 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     ///   - sessionId: The session ID for tap-to-open navigation
     ///   - isError: Whether the task ended with an error
     /// [T-ios-live-activity-privacy-mode] Content-free notification body:
-    /// "1 task completed 路 2m 15s". The duration is appended only when a start
+    /// "1 task completed · 2m 15s". The duration is appended only when a start
     /// time is available (a Live Activity run was in flight); otherwise the body
-    /// degrades to just the count, per spec 鈥?no extra time tracking is added.
+    /// degrades to just the count, per spec — no extra time tracking is added.
     private static func privacyNotificationBody(isError: Bool, startedAt: Date?) -> String {
         let base = isError
             ? AppLocalized("1 task failed")
@@ -869,7 +872,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         } else {
             formatted = String(format: "%ds", elapsed)
         }
-        return "\(base) 路 \(formatted)"
+        return "\(base) · \(formatted)"
     }
 
     func postBackgroundTaskNotification(sessionTitle: String, responseSummary: String, sessionId: String, isError: Bool = false, wasBackground: Bool? = nil) {
@@ -896,14 +899,14 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             // title, no reply summary. sessionId stays in userInfo below so the
             // tap-to-open jump keeps working, and the badge logic is untouched.
             content.title = isError
-                ? AppLocalized("鉂?Task failed")
-                : AppLocalized("鉁?Task completed")
+                ? AppLocalized("❌ Task failed")
+                : AppLocalized("✅ Task completed")
             content.body = Self.privacyNotificationBody(
                 isError: isError,
                 startedAt: AgentLiveActivityManager.shared.taskStartTime
             )
         } else {
-            content.title = "\(isError ? "鉂? : "鉁?) \(sessionTitle)"
+            content.title = "\(isError ? "❌" : "✅") \(sessionTitle)"
             content.body = responseSummary
         }
         content.sound = .default
@@ -944,14 +947,14 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.backgroundLocationArmTimer = nil
-                // Re-check we're still backgrounded 鈥?a fg blip may have fired
+                // Re-check we're still backgrounded — a fg blip may have fired
                 // after the timer was created but the disarm beat us here.
                 guard self.appIsInBackground else {
-                    logger.info("[BKA][LocationArm] arm fired but no longer backgrounded 鈥?skip")
+                    logger.info("[BKA][LocationArm] arm fired but no longer backgrounded — skip")
                     return
                 }
                 self.backgroundLocationArmed = true
-                logger.info("[BKA][LocationArm] armed 鈥?starting location keep-alive now")
+                logger.info("[BKA][LocationArm] armed — starting location keep-alive now")
                 self.evaluateLocationUpdates()
                 self.evaluateBackgroundActivitySession()
             }
@@ -973,11 +976,11 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     /// [T-ios-bgactivitysession-leak] Unified location-state cleanup run on every
     /// foreground return. Order matters:
     ///   1. disarm + stop the 5s requestLocation timer (foreground never needs it),
-    ///   2. evaluate the iOS17 session 鈥?now disarmed, this tears OUR session down,
+    ///   2. evaluate the iOS17 session — now disarmed, this tears OUR session down,
     ///   3. retract any ORPHANED session (a leak from a prior crash/force-kill that
     ///      our handle can't reach) so a stale indicator never survives a relaunch,
     ///   4. re-sync the Live Activity to the current session set.
-    /// This is the single place that guarantees: back in the foreground 鈬?no
+    /// This is the single place that guarantees: back in the foreground ⇒ no
     /// location indicator, regardless of how the app last died.
     private func cleanupLocationStateOnForeground() {
         disarmBackgroundLocation()
@@ -989,7 +992,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             locationManager.stopUpdatingLocation()
             locationManager.allowsBackgroundLocationUpdates = false
         }
-        // Tear down our own iOS17 session (disarmed 鈬?shouldRun is false).
+        // Tear down our own iOS17 session (disarmed ⇒ shouldRun is false).
         evaluateBackgroundActivitySession()
         // Retract any orphaned session our handle can't reach.
         retractOrphanedLocationSession(caller: "foreground")
@@ -1034,7 +1037,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         let hasPermission = locationAuthStatus == .authorizedAlways || locationAuthStatus == .authorizedWhenInUse
         // `isActive` is false the moment no agent task is running (see
         // reevaluate). So as soon as the last task finishes, shouldRun flips to
-        // false and the session below is torn down immediately 鈥?we never keep
+        // false and the session below is torn down immediately — we never keep
         // the location stream (or its system indicator) alive past the work.
         //
         // [T-ios-bg-location-arm-delay] Also gated on appIsInBackground +
@@ -1048,13 +1051,13 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         // Singleton by construction: this manager is a `.shared` instance and
         // `liveUpdatesTask`/`bgActivitySession` are single-valued, so N
         // concurrent background sessions still drive exactly ONE global
-        // CLBackgroundActivitySession + one liveUpdates stream 鈥?never one per
+        // CLBackgroundActivitySession + one liveUpdates stream — never one per
         // chat session. The `liveUpdatesTask == nil` guard makes start idempotent.
         if shouldRun && liveUpdatesTask == nil {
             startBackgroundActivitySession()
         } else if !shouldRun {
-            // Tear down whenever we shouldn't be running 鈥?even if liveUpdatesTask
-            // is already nil 鈥?so a session orphaned by a prior force-kill (task
+            // Tear down whenever we shouldn't be running — even if liveUpdatesTask
+            // is already nil — so a session orphaned by a prior force-kill (task
             // nil, but the system indicator still pinned) gets explicitly
             // invalidated rather than lingering.
             stopBackgroundActivitySession()
@@ -1081,7 +1084,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
                         self.lastLocationLAUpdate = now
                         let lat = update.location.map { Self.maskCoordinate($0.coordinate.latitude) } ?? "?"
                         let lon = update.location.map { Self.maskCoordinate($0.coordinate.longitude) } ?? "?"
-                        logger.info("[BKA][LocationLA] tick (\(lat),\(lon)) 鈥?pushing LA update")
+                        logger.info("[BKA][LocationLA] tick (\(lat),\(lon)) — pushing LA update")
                         self.updateLiveActivityIfNeeded(source: "locationLA")
                     }
                 } catch {
@@ -1123,9 +1126,9 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     ///
     /// `caller` is logged so we can tell which path (cold start / foreground)
     /// actually cleared a leak. Safe to call whenever WE are not currently
-    /// running our own session 鈥?guarded on `liveUpdatesTask == nil &&
+    /// running our own session — guarded on `liveUpdatesTask == nil &&
     /// bgActivitySession == nil` so it never tears down a live, owned session.
-    /// Note: it intentionally does NOT skip when a task is active 鈥?a leaked
+    /// Note: it intentionally does NOT skip when a task is active — a leaked
     /// session must be retracted even mid-task; if keep-alive should genuinely
     /// run, the subsequent `evaluateBackgroundActivitySession()` recreates a
     /// fresh, owned session.
@@ -1147,7 +1150,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         // and reset so we can re-engage keepalive.
         if isActive && appIsInBackground && backgroundSpeakEnabled
             && !silentAudioActive && silentAudioSuspendCount > 2 {
-            logger.warning("[BackgroundKeepAlive] silentAudioSuspendCount=\(self.silentAudioSuspendCount) looks leaked 鈥?resetting to 0")
+            logger.warning("[BackgroundKeepAlive] silentAudioSuspendCount=\(self.silentAudioSuspendCount) looks leaked — resetting to 0")
             silentAudioSuspendCount = 0
         }
 
@@ -1160,23 +1163,23 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             if silentAudioSuspendCount > 0 { return "suspended=\(silentAudioSuspendCount)" }
             return "ok"
         }()
-        // [BKA][Evaluate] decision chain 鈥?caller, all inputs, and the resolved
+        // [BKA][Evaluate] decision chain — caller, all inputs, and the resolved
         // PLAY / STOP / NOOP decision so the crash-time timeline shows exactly
         // who triggered each evaluation and why it stopped or started audio.
         let decision: String = {
             if shouldPlay { return silentAudioActive ? "NOOP(already playing)" : "PLAY" }
             return silentAudioActive ? "STOP" : "NOOP(already stopped)"
         }()
-        logger.info("[BKA][Evaluate] caller=\(caller) isActive=\(self.isActive) bgSpeak=\(self.backgroundSpeakEnabled) bg=\(self.appIsInBackground) sessions=\(sessions) suspended=\(self.silentAudioSuspendCount) playing=\(self.silentAudioActive) stopDebounce=\(self.stopDebouncePending ? "pending" : "nil") 鈫?decision=\(decision) reason=\(reason)")
+        logger.info("[BKA][Evaluate] caller=\(caller) isActive=\(self.isActive) bgSpeak=\(self.backgroundSpeakEnabled) bg=\(self.appIsInBackground) sessions=\(sessions) suspended=\(self.silentAudioSuspendCount) playing=\(self.silentAudioActive) stopDebounce=\(self.stopDebouncePending ? "pending" : "nil") → decision=\(decision) reason=\(reason)")
 
         if shouldPlay && !silentAudioActive {
             // A fresh background signal (or any condition that re-enables play)
-            // cancels any debounced stop in flight 鈥?the transient foreground
+            // cancels any debounced stop in flight — the transient foreground
             // blip is over and we want to keep the audio running.
             cancelPendingSilentAudioStop(reason: "shouldPlay=true")
             startSilentAudio()
         } else if shouldPlay && silentAudioActive {
-            // Already playing AND should keep playing 鈥?a transient foreground
+            // Already playing AND should keep playing — a transient foreground
             // blip that flipped back before its debounce fired. Make sure no
             // stale stop is still queued.
             cancelPendingSilentAudioStop(reason: "still shouldPlay")
@@ -1184,8 +1187,8 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             // [T-ios-bg-idle-grace] Split the single "should stop" branch by WHY.
             // Only the pure-idle transition (isActive went false while every other
             // condition still says "keep playing") gets the 60s grace window.
-            // Everything else 鈥?Background Speak switched off, an explicit media
-            // suspend, a genuine foreground return 鈥?is an explicit intent to
+            // Everything else — Background Speak switched off, an explicit media
+            // suspend, a genuine foreground return — is an explicit intent to
             // stop and must take effect immediately, so those fall through to the
             // pre-existing path unchanged (which includes the 1.5s transient-
             // foreground debounce; the two windows never overlap because this
@@ -1202,7 +1205,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
                 requestStopSilentAudio(transientForeground: !appIsInBackground)
             }
         } else if shouldPlay {
-            // Work is back (or never left) 鈥?a queued idle grace is now moot.
+            // Work is back (or never left) — a queued idle grace is now moot.
             // Covers both shouldPlay branches above; cancelIdleGrace is a no-op
             // when nothing is pending.
             cancelIdleGrace(reason: "shouldPlay=true")
@@ -1217,13 +1220,13 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     /// It buys a fixed, bounded window of background battery in exchange for
     /// tolerating a state-sync hiccup around the moment the last session ends.
     ///
-    /// Leak safety 鈥?this timer is cleared in EVERY one of these paths:
+    /// Leak safety — this timer is cleared in EVERY one of these paths:
     ///   1. its own handler, which always nils it before doing anything else;
     ///   2. `cancelIdleGrace` from `evaluateSilentAudio` when work returns
     ///      (`shouldPlay`) or when an explicit stop reason appears;
-    ///   3. `stopSilentAudio` 鈥?catches direct callers (media suspend,
+    ///   3. `stopSilentAudio` — catches direct callers (media suspend,
     ///      interruption teardown) that bypass `evaluateSilentAudio` entirely;
-    ///   4. `startSilentAudio` 鈥?a restart must never leave a stale stop queued;
+    ///   4. `startSilentAudio` — a restart must never leave a stale stop queued;
     ///   5. `prepareForTermination`.
     /// Non-repeating by construction (`.now() + interval`, no `repeating:`), so
     /// even a missed cleanup can only ever fire once.
@@ -1233,10 +1236,10 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         // never stops".
         guard idleGraceTimer == nil else {
             let waited = idleGraceStartedAt.map { Date().timeIntervalSince($0) } ?? 0
-            logger.info("[BKA][IdleGrace] already pending (\(String(format: "%.1f", waited))s elapsed) 鈥?not re-arming")
+            logger.info("[BKA][IdleGrace] already pending (\(String(format: "%.1f", waited))s elapsed) — not re-arming")
             return
         }
-        logger.info("[BKA][IdleGrace] idle 鈥?holding keep-alive for \(Int(Self.idleGracePeriod))s before stopping")
+        logger.info("[BKA][IdleGrace] idle — holding keep-alive for \(Int(Self.idleGracePeriod))s before stopping")
         recordBKAEvent("IdleGrace(start,\(Int(Self.idleGracePeriod))s)")
         idleGraceStartedAt = Date()
         let timer = DispatchSource.makeTimerSource(queue: .main)
@@ -1254,7 +1257,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             // unconditional: any path that made keep-alive wanted again
             // (evaluateSilentAudio -> shouldPlay, startSilentAudio) has already
             // cancelled this timer, so reaching here means nothing re-armed it.
-            logger.info("[BKA][IdleGrace] expired 鈥?stopping keep-alive now")
+            logger.info("[BKA][IdleGrace] expired — stopping keep-alive now")
             self.stopSilentAudio(reason: "idle_grace_expired(\(Int(Self.idleGracePeriod))s)")
         }
         idleGraceTimer = timer
@@ -1269,7 +1272,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         idleGraceTimer = nil
         let waited = idleGraceStartedAt.map { Date().timeIntervalSince($0) } ?? 0
         idleGraceStartedAt = nil
-        logger.info("[BKA][IdleGrace] cancelled after \(String(format: "%.1f", waited))s 鈥?\(reason)")
+        logger.info("[BKA][IdleGrace] cancelled after \(String(format: "%.1f", waited))s — \(reason)")
         recordBKAEvent("IdleGrace(cancel,\(reason))")
     }
 
@@ -1291,13 +1294,13 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             stopSilentAudio(reason: transientForeground ? "foreground_sessions0" : "evaluate")
             return
         }
-        // Already have a pending stop 鈥?let it ride (don't reset the timer, so a
+        // Already have a pending stop — let it ride (don't reset the timer, so a
         // burst of foreground passes can't indefinitely postpone the real stop).
         if pendingSilentAudioStop != nil {
-            logger.info("[BKA][Debounce] already scheduled 鈥?keeping existing timer (sessions=\(sessionCount))")
+            logger.info("[BKA][Debounce] already scheduled — keeping existing timer (sessions=\(sessionCount))")
             return
         }
-        logger.info("[BKA][Debounce] scheduled stop in \(Self.silentAudioStopDebounce)s 鈥?sessions=\(sessionCount) caller=foregroundSignal")
+        logger.info("[BKA][Debounce] scheduled stop in \(Self.silentAudioStopDebounce)s — sessions=\(sessionCount) caller=foregroundSignal")
         recordBKAEvent("Stop(reason=foreground,debounce=pending)")
         let scheduledAt = Date()
         pendingStopScheduledAt = scheduledAt
@@ -1312,10 +1315,10 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             let stillActive = self.isActive && self.backgroundSpeakEnabled
                 && self.silentAudioSuspendCount == 0
             if stillForeground || !stillActive {
-                logger.info("[BKA][Debounce] fired 鈥?proceeding to stop (sessions=\(nowSessions), foreground=\(stillForeground))")
+                logger.info("[BKA][Debounce] fired — proceeding to stop (sessions=\(nowSessions), foreground=\(stillForeground))")
                 self.stopSilentAudio(reason: "debounce_expired(\(Self.silentAudioStopDebounce)s)")
             } else {
-                logger.info("[BKA][Debounce] fired 鈥?skipping stop, app re-backgrounded (sessions=\(nowSessions)) 鈥?KEEPING silent audio")
+                logger.info("[BKA][Debounce] fired — skipping stop, app re-backgrounded (sessions=\(nowSessions)) — KEEPING silent audio")
                 self.recordBKAEvent("Stop skipped (re-backgrounded)")
             }
         }
@@ -1331,7 +1334,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         let elapsed = pendingStopScheduledAt.map { Date().timeIntervalSince($0) }
         pendingStopScheduledAt = nil
         let elapsedStr = elapsed.map { String(format: "elapsed=%.1fs", $0) } ?? ""
-        logger.info("[BKA][Debounce] cancelled 鈥?\(reason) \(elapsedStr)")
+        logger.info("[BKA][Debounce] cancelled — \(reason) \(elapsedStr)")
         recordBKAEvent("Debounce cancelled (\(reason))")
     }
 
@@ -1354,14 +1357,14 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         // up to 3 total attempts) by re-invoking startSilentAudio, so we never
         // block the main thread yet still recover from the transient rejection.
         // The session category/active is owned by AudioSessionCoordinator. Declare
-        // the keep-alive intent (lowest priority) 鈥?the coordinator applies the
+        // the keep-alive intent (lowest priority) — the coordinator applies the
         // .mixWithOthers profile ONLY when nothing higher (reply TTS / media /
         // capture) is active, so the silent track no longer clobbers TTS's profile.
         // The silent AVAudioEngine below plays regardless to keep the process alive.
         MainActor.assumeIsolated {
             AudioSessionCoordinator.shared.begin(.backgroundKeepAlive)
         }
-        logger.info("[BKA][Start] begin(.backgroundKeepAlive) 鈥?acquiring engine")
+        logger.info("[BKA][Start] begin(.backgroundKeepAlive) — acquiring engine")
         silentAudioActivationRetries = 0
 
         let engine = AVAudioEngine()
@@ -1390,7 +1393,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             silentPlayerNode = player
             silentAudioActive = true
             startAudioUpdateTimer()
-            logger.info("[BKA][Start] engine running 鈥?silent audio keep-alive ACTIVE")
+            logger.info("[BKA][Start] engine running — silent audio keep-alive ACTIVE")
         } catch {
             logger.error("[BKA][Start] engine.start() FAILED: \(error.localizedDescription)")
         }
@@ -1404,7 +1407,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     private func scheduleSilentAudioActivationRetry() {
         silentAudioActivationRetries += 1
         guard silentAudioActivationRetries < Self.maxActivationRetries else {
-            logger.error("[BKA][Start] exhausted \(Self.maxActivationRetries) activation attempts 鈥?giving up")
+            logger.error("[BKA][Start] exhausted \(Self.maxActivationRetries) activation attempts — giving up")
             recordBKAEvent("Start FAILED (exhausted retries)")
             silentAudioActivationRetries = 0
             return
@@ -1416,11 +1419,11 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
                 && self.appIsInBackground && self.silentAudioSuspendCount == 0
                 && !self.silentAudioActive
             guard stillWanted else {
-                logger.info("[BKA][Start] activation retry #\(attempt) skipped 鈥?keep-alive no longer wanted")
+                logger.info("[BKA][Start] activation retry #\(attempt) skipped — keep-alive no longer wanted")
                 self.silentAudioActivationRetries = 0
                 return
             }
-            logger.info("[BKA][Start] activation retry #\(attempt) 鈥?re-attempting")
+            logger.info("[BKA][Start] activation retry #\(attempt) — re-attempting")
             self.startSilentAudio(reason: "activationRetry#\(attempt)")
         }
     }
@@ -1442,8 +1445,8 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     /// STRICTLY gated on `enhancedBackgroundEffective` (the user's
     /// enhancedBackgroundEnabled AND backgroundSpeakEnabled toggles both being
     /// on). If the user hasn't opted into background keep-alive, this is a
-    /// no-op 鈥?we do NOT silently start background audio playback behind their
-    /// back. Returns `(armed, skipReason)` 鈥?a non-nil `skipReason` accompanies
+    /// no-op — we do NOT silently start background audio playback behind their
+    /// back. Returns `(armed, skipReason)` — a non-nil `skipReason` accompanies
     /// `armed=false` so callers can log/persist WHY we skipped without having
     /// to reconstruct the gating logic.
     @MainActor
@@ -1475,7 +1478,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         // [T-ios-bg-idle-grace] Also clear a pending idle grace. Required, not
         // belt-and-braces: stopSilentAudio has direct callers (media suspend,
         // interruption teardown) that never go through evaluateSilentAudio, and
-        // the grace timer's own handler calls in here 鈥?clearing it first there
+        // the grace timer's own handler calls in here — clearing it first there
         // makes this a no-op rather than re-entrancy.
         cancelIdleGrace(reason: "stopSilentAudio called")
         silentAudioActivationRetries = 0
@@ -1489,7 +1492,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         silentPlayerNode = nil
         audioEngine = nil
         silentAudioActive = false
-        // End the keep-alive intent 鈥?the coordinator re-applies the next-highest
+        // End the keep-alive intent — the coordinator re-applies the next-highest
         // intent's profile (reply TTS / capture) or deactivates the session,
         // letting other apps resume. (No direct setActive here anymore.)
         MainActor.assumeIsolated {
@@ -1507,7 +1510,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     /// [T-ios-live-activity-audio-toggle] Entry point for audio-driven Live
     /// Activity changes. Unlike `updateLiveActivityIfNeeded` (gated on `isActive`,
     /// which is only true while an Agent task runs), this always forwards to the
-    /// manager so a pure-audio playback 鈥?with zero Agent sessions 鈥?can start,
+    /// manager so a pure-audio playback — with zero Agent sessions — can start,
     /// refresh, or end its own Live Activity. When an Agent task is also running,
     /// the manager updates that single existing activity in place (never a 2nd one).
     func audioPlaybackStateChanged(source: String) {
@@ -1565,7 +1568,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             } else if toolStatus.isEmpty {
                 statusText = displayName
             } else {
-                statusText = "\(displayName) 路 \(toolStatus)"
+                statusText = "\(displayName) · \(toolStatus)"
             }
             logger.info("[LiveActivity][snapshot] sid=\(sid.prefix(8)) toolName=\(toolName) icon=\(icon) status=\(statusText) title=\(title.prefix(20))")
             return LiveSessionSnapshot(
@@ -1582,7 +1585,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         return 10.0
     }
 
-    /// Foreground RunLoop timer 鈥?works while app is active.
+    /// Foreground RunLoop timer — works while app is active.
     private func startUpdateTimer() {
         stopUpdateTimer()
         let interval = updateInterval
@@ -1610,7 +1613,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         stopAudioUpdateTimer()
         stopUpdateTimer()
         let interval = updateInterval
-        logger.info("[BackgroundKeepAlive] Starting audio update timer (interval=\(interval)s) 鈥?fgTimer suspended")
+        logger.info("[BackgroundKeepAlive] Starting audio update timer (interval=\(interval)s) — fgTimer suspended")
         let timer = DispatchSource.makeTimerSource(queue: .main)
         timer.schedule(deadline: .now() + interval, repeating: interval)
         timer.setEventHandler { [weak self] in
@@ -1628,7 +1631,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         audioUpdateTimer = nil
         if isActive {
             startUpdateTimer()
-            logger.info("[BackgroundKeepAlive] audioUpdateTimer stopped 鈥?fgTimer resumed")
+            logger.info("[BackgroundKeepAlive] audioUpdateTimer stopped — fgTimer resumed")
         }
     }
 }
@@ -1643,8 +1646,8 @@ final class BackgroundInterruptionTracker: ObservableObject {
 
     /// How many interruptions must accumulate before the banner is shown again.
     /// Starts at 1 (remind on every interruption). Each "Remind me later" tap
-    /// doubles it, clamped to [minInterval, maxInterval] 鈥?true exponential
-    /// back-off: 1 鈫?2 鈫?4 鈫?8 鈫?10 (capped).
+    /// doubles it, clamped to [minInterval, maxInterval] — true exponential
+    /// back-off: 1 → 2 → 4 → 8 → 10 (capped).
     private static let minInterval = 1
     private static let maxInterval = 10
     private static let intervalKey = "enhancedBackgroundRemindInterval"
@@ -1674,7 +1677,7 @@ final class BackgroundInterruptionTracker: ObservableObject {
     // from a SwiftUI view body (BackgroundInterruptionBanner, mounted at the app
     // root), so its init runs on the main thread during scene-create. Reaching
     // for `BackgroundKeepAliveManager.shared` HERE is what dragged that manager's
-    // own dispatch_once 鈥?and, before the fix, its CoreLocation IPC 鈥?onto that
+    // own dispatch_once — and, before the fix, its CoreLocation IPC — onto that
     // critical path. Keep this init free of cross-singleton work and subscribe
     // lazily instead.
     private init() {}
@@ -1713,7 +1716,7 @@ final class BackgroundInterruptionTracker: ObservableObject {
 
         interruptionCount += 1
         guard interruptionCount >= remindInterval else { return }
-        // Threshold reached 鈥?reset the counter and show the banner.
+        // Threshold reached — reset the counter and show the banner.
         interruptionCount = 0
         showBanner = true
     }
@@ -1722,7 +1725,7 @@ final class BackgroundInterruptionTracker: ObservableObject {
         showBanner = false
     }
 
-    /// "Remind me later" 鈥?back off the reminder frequency (double it, clamped
+    /// "Remind me later" — back off the reminder frequency (double it, clamped
     /// to [minInterval, maxInterval]), clear the accumulated count, and dismiss.
     func remindLaterAndDismiss() {
         let doubled = remindInterval * 2
@@ -1752,7 +1755,7 @@ struct BackgroundInterruptionBanner: View {
                     NavigationStack { EnhancedBackgroundSettingsView() }
                 }
                 // [T-ios-scene-create-watchdog-corelocation] Subscribe only once
-                // the banner is actually on screen 鈥?the subscription exists to
+                // the banner is actually on screen — the subscription exists to
                 // auto-dismiss a VISIBLE banner, so there is nothing to observe
                 // before that. This keeps BackgroundKeepAliveManager.shared off
                 // the scene-create path (it is otherwise forced by setup(), well
