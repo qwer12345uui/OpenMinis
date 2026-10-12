@@ -41,6 +41,13 @@ for _LLVM_PREFIX in /opt/homebrew/opt/llvm /usr/local/opt/llvm; do
         break
     fi
 done
+# Homebrew now ships the ELF linker as a separate `lld` formula.
+for _LLD_PREFIX in /opt/homebrew/opt/lld /usr/local/opt/lld; do
+    if [ -d "$_LLD_PREFIX/bin" ]; then
+        export PATH="$_LLD_PREFIX/bin:$PATH"
+        break
+    fi
+done
 # Homebrew's libarchive is keg-only; make it visible to pkg-config.
 for _LA_PREFIX in /opt/homebrew/opt/libarchive /usr/local/opt/libarchive; do
     if [ -d "$_LA_PREFIX/lib/pkgconfig" ]; then
@@ -52,9 +59,9 @@ done
 # Ensure the ELF linker `ld.lld` resolves for -fuse-ld=lld. Some LLVM
 # distributions ship the multiplexing `lld` binary without the `ld.lld`
 # symlink, which makes clang fail with "invalid linker name".
-_LLBIN="$(dirname "$(command -v clang)")"
-if [ -x "$_LLBIN/lld" ] && [ ! -x "$_LLBIN/ld.lld" ]; then
-    ln -sf "$_LLBIN/lld" "$_LLBIN/ld.lld" 2>/dev/null || true
+if ! command -v ld.lld >/dev/null 2>&1 && command -v lld >/dev/null 2>&1; then
+    _LLBIN="$(dirname "$(command -v clang)")"
+    ln -sf "$(command -v lld)" "$_LLBIN/ld.lld" 2>/dev/null || true
 fi
 
 # Build configuration
