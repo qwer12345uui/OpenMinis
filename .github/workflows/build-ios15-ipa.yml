@@ -29,7 +29,7 @@ jobs:
       - name: Install native build dependencies
         run: |
           set -euo pipefail
-          brew install ninja llvm libarchive pkg-config go
+          brew install ninja llvm lld libarchive pkg-config go
           python3 -m pip install meson --break-system-packages 2>/dev/null || python3 -m pip install meson
           echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
 
