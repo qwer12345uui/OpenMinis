@@ -49,6 +49,14 @@ for _LA_PREFIX in /opt/homebrew/opt/libarchive /usr/local/opt/libarchive; do
     fi
 done
 
+# Ensure the ELF linker `ld.lld` resolves for -fuse-ld=lld. Some LLVM
+# distributions ship the multiplexing `lld` binary without the `ld.lld`
+# symlink, which makes clang fail with "invalid linker name".
+_LLBIN="$(dirname "$(command -v clang)")"
+if [ -x "$_LLBIN/lld" ] && [ ! -x "$_LLBIN/ld.lld" ]; then
+    ln -sf "$_LLBIN/lld" "$_LLBIN/ld.lld" 2>/dev/null || true
+fi
+
 # Build configuration
 BUILD_TYPE="${1:-release}"
 ARCHS="arm64"
