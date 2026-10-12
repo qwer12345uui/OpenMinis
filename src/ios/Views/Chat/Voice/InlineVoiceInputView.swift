@@ -786,7 +786,7 @@ struct InlineVoiceInputView: View {
             GrowingTextField("", text: Binding(
                 get: { viewModel.transcript },
                 set: { viewModel.setTranscript($0); inputText = $0 }
-            )
+            ))
                 .focused($editFocused)
                 .font(.body)
                 .multilineTextAlignment(.center)
