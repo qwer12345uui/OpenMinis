@@ -1,4 +1,4 @@
-﻿import Foundation
+import Foundation
 import Combine
 
 private let logger = AppLogger(category: "HelperRunner")
@@ -8,12 +8,12 @@ private let logger = AppLogger(category: "HelperRunner")
 // in a HIDDEN child session, concurrently with the parent, and returns the
 // helper's final answer as this tool call's result.
 //
-// Design v4 搂4/搂6. P1 = wait mode only: the parent turn blocks on the child
-// loop, so the "completion hook" is simply the tool_result 鈥?no injection
+// Design v4 §4/§6. P1 = wait mode only: the parent turn blocks on the child
+// loop, so the "completion hook" is simply the tool_result — no injection
 // into the parent, no queue race. `wait: false` (background mode via
 // AgentJobRegistry `then: .followUpParent`) is P2.
 //
-// Why a pure Tool Call and not a CLI (design v4 搂4.5): the run needs the
+// Why a pure Tool Call and not a CLI (design v4 §4.5): the run needs the
 // parent VM reference to suspend reactively, shares in-process state with
 // the capsule / sheet UI, and Stop must reach the child VM's `cancel()`
 // directly rather than hunting a pid inside iSH.
@@ -24,7 +24,7 @@ struct HelperConfig {
     let parentSessionId: String
     let parentToolUseId: String
     let jobId: String
-    /// Hard cap on the child's agent-loop turns (design 搂4.3: 25).
+    /// Hard cap on the child's agent-loop turns (design §4.3: 25).
     let maxTurns: Int
     let title: String
     let modelOrigin: HelperModelOrigin
@@ -51,7 +51,7 @@ extension AIChatViewModel {
     /// `ProviderConfigStore.inferenceConfig(for: sessionId)?.thinkingLevel ?? .off`
     /// (see AIChatViewModel+Fallback). A session gets that config written when
     /// the user picks a model or group in `SessionModelPicker`, or when
-    /// `loadSession` applies a group default 鈥?both UI paths. A CHILD session is
+    /// `loadSession` applies a group default — both UI paths. A CHILD session is
     /// created straight from `ChatStore.createSession` here and touched by
     /// neither, so it had no config at all and every sub agent request went out
     /// at `.off`, however the group was configured. That is the reported
@@ -59,22 +59,22 @@ extension AIChatViewModel {
     ///
     /// Two sources, matching where the child's MODEL came from:
     ///
-    ///   * A definition that pins a Model Group 鈫?that group's
+    ///   * A definition that pins a Model Group → that group's
     ///     `defaultThinkingLevel`. The user configured the group the sub agent
     ///     runs on, so its default is the one that applies.
-    ///   * Auto / inherited 鈫?the PARENT session's level, so a delegation made
+    ///   * Auto / inherited → the PARENT session's level, so a delegation made
     ///     from a high-effort conversation reasons like the conversation it came
     ///     from. Falls back to the resolved group's default when the parent has
     ///     no config of its own.
     ///
     /// Clamped to the resolved entry's `effectiveMaxThinkingLevel`, exactly as
-    /// the send path clamps it 鈥?a group default of `xhigh` inherited onto a
+    /// the send path clamps it — a group default of `xhigh` inherited onto a
     /// member that tops out at `high` would 400 otherwise
     /// ([T-fallback-thinking-preclamp] covers the same trap on fallback).
     ///
     /// Writes nothing when the resolved level is `.off`, so a run that should
     /// not think stays byte-identical to before this change.
-    /// Returns the level it applied, or nil when reasoning stays off 鈥?so the
+    /// Returns the level it applied, or nil when reasoning stays off — so the
     /// delegation payload can report what actually took effect instead of
     /// re-deriving the precedence chain and risking the two disagreeing.
     @discardableResult
@@ -93,8 +93,8 @@ extension AIChatViewModel {
         var level: ThinkingLevel = {
             // [T-subagent-thinking-override] The definition's own setting wins
             // over everything below it. It is the most specific statement of
-            // intent available 鈥?the user chose it for THIS sub agent, knowing
-            // which group it runs on 鈥?so it overrides the group default the
+            // intent available — the user chose it for THIS sub agent, knowing
+            // which group it runs on — so it overrides the group default the
             // same way a session-level pick does, and it beats inheriting the
             // parent conversation's level too. nil means "not set", which is
             // every definition until the user picks one, and leaves the
@@ -128,21 +128,21 @@ extension AIChatViewModel {
             : "Your time budget is up."
         return """
         [\(why) Tools are no longer available for this turn.]
-        Write your final answer NOW from what you already have. It must contain the complete deliverable itself 鈥?the full report, document, list or answer the task asked for 鈥?not a description of what you did, not a pointer to a file, not a request for more time. Mark anything you could not verify as unverified. This message is returned to the parent agent verbatim.
+        Write your final answer NOW from what you already have. It must contain the complete deliverable itself — the full report, document, list or answer the task asked for — not a description of what you did, not a pointer to a file, not a request for more time. Mark anything you could not verify as unverified. This message is returned to the parent agent verbatim.
         """
     }
 
     /// What the parent reads when the child really ended without any text
     /// (cancelled mid-tool, crashed, or cut off after the grace period).
     static func emptyResultNote(status: String) -> String {
-        "(the agent ended with status \(status) before writing a final answer; there is no deliverable 鈥?re-delegate with a narrower task or a larger budget rather than reading its transcript)"
+        "(the agent ended with status \(status) before writing a final answer; there is no deliverable — re-delegate with a narrower task or a larger budget rather than reading its transcript)"
     }
 
     /// [T-subagent-no-deliverable-status] The wire status for "the loop ended
     /// cleanly but produced nothing".
     ///
     /// A sub agent that exhausts its turns, or is cut off after the wrap-up
-    /// grace period, still leaves the loop with `completed` 鈥?nothing threw and
+    /// grace period, still leaves the loop with `completed` — nothing threw and
     /// nothing was cancelled. Reporting that as `completed` made the parent
     /// bubble render a green check, "Done", the model name and the elapsed
     /// time, while the result body right below it said there was no
@@ -151,7 +151,7 @@ extension AIChatViewModel {
     ///
     /// This is deliberately a distinct status rather than reusing `failed`:
     /// nothing malfunctioned. The run happened, cost real tokens and time, and
-    /// its transcript is intact 鈥?it just did not produce the thing it was
+    /// its transcript is intact — it just did not produce the thing it was
     /// asked for. `failed` would misdescribe that (and reads as "retry the same
     /// thing"), while `completed` overclaims. The actionable advice differs
     /// too: the fix here is a narrower task or a bigger budget, which is
@@ -162,7 +162,7 @@ extension AIChatViewModel {
     /// child's error text.
     ///
     /// The card has room for a label, not a stack trace, and "Failed" alone
-    /// gives the user nothing to act on 鈥?a rate limit, a dead network and a
+    /// gives the user nothing to act on — a rate limit, a dead network and a
     /// context overflow need three different responses. Attribution is
     /// best-effort: anything unrecognised keeps the generic label rather than
     /// inventing a category, and the full text is carried separately for the
@@ -231,7 +231,7 @@ extension AIChatViewModel {
     /// [T-agent-wrapup-turn] Budget over: ask the child for its deliverable
     /// and wait for it. The wrap-up prompt is injected at the top of the
     /// child's NEXT loop turn, so a child blocked inside one long tool call
-    /// (a 150 s shell loop, a slow page) would never get there 鈥?after a
+    /// (a 150 s shell loop, a slow page) would never get there — after a
     /// short patience the running tool is stopped (same path as the user's
     /// stop-this-command button: the loop continues with a cancelled tool
     /// result, the whole run is not cancelled). True = the child finished
@@ -240,7 +240,7 @@ extension AIChatViewModel {
         child.helperWrapUpRequested = true
         if await awaitChildIdle(child, seconds: helperWrapUpToolPatience) { return true }
         if child.isProcessing {
-            logger.warning("[delegate_task] child \(childId.prefix(8)) still inside a tool after \(Int(helperWrapUpToolPatience))s 鈥?stopping the tool so the wrap-up turn can start")
+            logger.warning("[delegate_task] child \(childId.prefix(8)) still inside a tool after \(Int(helperWrapUpToolPatience))s — stopping the tool so the wrap-up turn can start")
             child.stopCurrentCommand()
         }
         return await awaitChildIdle(child, seconds: helperWrapUpGraceSeconds - helperWrapUpToolPatience)
@@ -251,12 +251,12 @@ extension AIChatViewModel {
 
     /// [T-p2-shared-workspace] The session whose `/var/minis` bucket this vm's
     /// shell and file tools operate in. A helper works in its PARENT's
-    /// workspace 鈥?it shares the
-    /// parent's files 鈥?so what it writes is what the parent (and the user)
+    /// workspace — it shares the
+    /// parent's files — so what it writes is what the parent (and the user)
     /// can read. Its transcript, media rows and job identity stay its own.
     var fsSessionId: String? { helperConfig?.parentSessionId ?? sessionId }
 
-    // MARK: - Limits (design 搂4.3, all enforced in code, not prompt)
+    // MARK: - Limits (design §4.3, all enforced in code, not prompt)
 
     /**
      * [T-subagent-turn-parity] Tool-round ceiling for a child, matched to the
@@ -279,16 +279,16 @@ extension AIChatViewModel {
      * [T-subagent-turn-countdown] How many rounds before the cliff the child is
      * warned that its tool budget is nearly gone.
      *
-     * The cap itself is deliberate (design 搂4.3) and unchanged. What was
+     * The cap itself is deliberate (design §4.3) and unchanged. What was
      * missing is any FEEDBACK on the way to it: the child is told "you have at
      * most N tool rounds" once, in the system prompt, then has to count its own
-     * turns across a long run 鈥?which models reliably fail to do. The reported
+     * turns across a long run — which models reliably fail to do. The reported
      * symptom is the consequence: a child spends its budget investigating and
      * first learns it is out of rounds on the wrap-up turn, when tools are
      * already gone and it can no longer write the file it was asked to produce.
      *
      * 3 leaves room to act: one round to close out the current thread, one to
-     * write the artifact, one spare 鈥?still before the tools-withdrawn turn.
+     * write the artifact, one spare — still before the tools-withdrawn turn.
      */
     static let turnWarningLead = 3
 
@@ -327,7 +327,7 @@ extension AIChatViewModel {
                              toolUseId: String,
                              msgIdx: Int,
                              blockIdx: Int) async -> (output: String, success: Bool) {
-        // 鈹€鈹€ Argument parsing 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+        // ── Argument parsing ─────────────────────────────────────────────
         let title = (args["tool_title"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let task = (args["task"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let context = (args["context"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -369,9 +369,9 @@ extension AIChatViewModel {
         // the call is QUEUED, not refused: the queue exists precisely so extra
         // delegations start as slots free, and refusing them here made a model
         // that fanned out five tasks in one turn see two of them come back
-        // "rejected" while three ran 鈥?the case the queue was built for.
+        // "rejected" while three ran — the case the queue was built for.
         // A delegation coming back from the queue has already served the
-        // per-turn allowance 鈥?it waited for a slot, which is what the
+        // per-turn allowance — it waited for a slot, which is what the
         // allowance exists to enforce. Re-applying the positional test would
         // send it straight back to the queue it just left.
         let fromQueue = (args[Self.queuedReentryKey] as? Bool) == true
@@ -397,7 +397,7 @@ extension AIChatViewModel {
                 .init(parentSessionId: parentSid, args: args, toolUseId: toolUseId))
             guard queued else {
                 return reject("helper_limit",
-                              "\(AgentJobRegistry.maxConcurrentChildJobs) sub agents are already running and the queue is full. Wait for some to finish, then delegate this task again 鈥?it was NOT queued.")
+                              "\(AgentJobRegistry.maxConcurrentChildJobs) sub agents are already running and the queue is full. Wait for some to finish, then delegate this task again — it was NOT queued.")
             }
             let json = Self.jsonString([
                 "ok": true, "status": "queued",
@@ -424,7 +424,7 @@ extension AIChatViewModel {
             return reject("no_model", "No model is configured for a helper to run on.")
         }
 
-        // 鈹€鈹€ Child session 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+        // ── Child session ────────────────────────────────────────────────
         let displayTitle = title.isEmpty ? String(task.prefix(40)) : title
         let session = await ChatStore.shared.createSession(
             modelId: resolution.entry.model.id,
@@ -455,7 +455,7 @@ extension AIChatViewModel {
         // the effective half fills in from the child's loop as it runs.
         job.modelIdentity = HelperModelIdentity.make(resolution: resolution)
 
-        // 鈹€鈹€ Child VM 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+        // ── Child VM ─────────────────────────────────────────────────────
         // [T-vmcache-pools] Children live in their own LRU pool so a fan-out
         // cannot evict the conversations the user is actually working in.
         let (child, _) = ViewModelCache.shared.getOrCreate(for: childId, kind: .child)
@@ -467,9 +467,9 @@ extension AIChatViewModel {
                                           subAgentId: subAgent.id,
                                           subAgentName: subAgent.name,
                                           subAgentInstructions: subAgent.instructions)
-        // No long-term memory for helpers (design 搂4.3 drops memory_write;
+        // No long-term memory for helpers (design §4.3 drops memory_write;
         // flipping the session toggle drops both tools AND the memory
-        // injection so prompt and tool list stay consistent 鈥?see report).
+        // injection so prompt and tool list stay consistent — see report).
         child.memoryEnabled = false
         child.suppressGeneralCompletionNotification = true
         // Shared browser: same tab set as the parent (T-p2-shared-workspace).
@@ -507,7 +507,7 @@ extension AIChatViewModel {
             messages[msgIdx].blocks[blockIdx].helperAgentName = subAgent.name
         }
 
-        // 鈹€鈹€ Background mode (P2): return now, report back later 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+        // ── Background mode (P2): return now, report back later ──────────
         if !wait {
             return startBackgroundHelper(job: job, child: child, childId: childId, toolUseId: toolUseId,
                                          resolution: resolution, modelOrigin: resolution.origin, minutes: minutes,
@@ -515,10 +515,10 @@ extension AIChatViewModel {
                                          msgIdx: msgIdx, blockIdx: blockIdx, converted: false)
         }
 
-        // 鈹€鈹€ Wait mode: poll until done / timeout / parent cancel / user follow-up 鈹€鈹€
+        // ── Wait mode: poll until done / timeout / parent cancel / user follow-up ──
         // One polling loop instead of racing tasks: every 500ms it mirrors
         // the child's activity into the parent block, honours the budget, and
-        // 鈥?new 鈥?converts to background the moment the USER sends a
+        // — new — converts to background the moment the USER sends a
         // follow-up in the parent (a queued prompt that is not a job result):
         // the tool returns `running` so the parent can answer the user now,
         // and the helper's result arrives later as its own message.
@@ -527,7 +527,7 @@ extension AIChatViewModel {
         var wrapUpAskedAt: Date? = nil
         var wrapUpToolStopped = false
         while child.isProcessing {
-            if Task.isCancelled { break }                       // parent Stop 鈫?cascade below
+            if Task.isCancelled { break }                       // parent Stop → cascade below
             if Date().timeIntervalSince(startedAt) >= TimeInterval(minutes * 60) {
                 // [T-agent-wrapup-turn] Budget over: first ask for the
                 // deliverable (one tool-less turn), cancel only if that does
@@ -536,7 +536,7 @@ extension AIChatViewModel {
                     let waited = Date().timeIntervalSince(asked)
                     if waited >= Self.helperWrapUpGraceSeconds {
                         finalStatus = "timeout"
-                        logger.warning("[delegate_task] TIMEOUT after \(minutes)m (+grace) 鈥?cancelling child \(childId.prefix(8))")
+                        logger.warning("[delegate_task] TIMEOUT after \(minutes)m (+grace) — cancelling child \(childId.prefix(8))")
                         child.cancel()
                         break
                     }
@@ -544,17 +544,17 @@ extension AIChatViewModel {
                         // Blocked inside one long tool call: stop the tool
                         // (not the run) so the wrap-up turn can start.
                         wrapUpToolStopped = true
-                        logger.warning("[delegate_task] child \(childId.prefix(8)) still inside a tool 鈥?stopping it for the wrap-up turn")
+                        logger.warning("[delegate_task] child \(childId.prefix(8)) still inside a tool — stopping it for the wrap-up turn")
                         child.stopCurrentCommand()
                     }
                 } else {
                     wrapUpAskedAt = Date()
                     child.helperWrapUpRequested = true
-                    logger.warning("[delegate_task] budget over after \(minutes)m 鈥?asking child \(childId.prefix(8)) to wrap up")
+                    logger.warning("[delegate_task] budget over after \(minutes)m — asking child \(childId.prefix(8)) to wrap up")
                 }
             }
             if promptQueue.contains(where: { !$0.deferUntilIdle }) {
-                logger.info("[delegate_task] user follow-up queued while waiting 鈥?converting job \(job.id.prefix(8)) to background")
+                logger.info("[delegate_task] user follow-up queued while waiting — converting job \(job.id.prefix(8)) to background")
                 job.then = .followUpParent(template: nil)
                 return startBackgroundHelper(job: job, child: child, childId: childId, toolUseId: toolUseId,
                                              resolution: resolution, modelOrigin: resolution.origin, minutes: minutes,
@@ -671,7 +671,7 @@ extension AIChatViewModel {
         // [T-sub-agents-steer] Queue a course correction into a running sub
         // agent without stopping it. The message is read at the child's next
         // loop boundary, so an in-flight tool call finishes first and the work
-        // done so far is kept 鈥?the whole reason to steer rather than cancel.
+        // done so far is kept — the whole reason to steer rather than cancel.
         if action == "steer" {
             guard let jid = jobIdArg, !jid.isEmpty else {
                 return (Self.jsonString(["ok": false, "error": "job_id_required_for_steer"]), false)
@@ -689,7 +689,7 @@ extension AIChatViewModel {
                 return (Self.jsonString([
                     "ok": false, "status": "rejected", "job_id": job.id,
                     "reason": "already_finished", "state": job.state.rawValue,
-                    "detail": "That sub agent has already finished 鈥?its result stands. Delegate a new task instead.",
+                    "detail": "That sub agent has already finished — its result stands. Delegate a new task instead.",
                 ]), false)
             }
             guard let cid = job.runSessionId, let child = ViewModelCache.shared.get(for: cid) else {
@@ -701,13 +701,13 @@ extension AIChatViewModel {
             }
             child.pendingSteerMessages.append(message)
             // [T-subagent-steer-continues-loop] If the child's loop is between
-            // turns right now, nothing is left to consume the steer 鈥?it would
+            // turns right now, nothing is left to consume the steer — it would
             // sit in the queue until the run ended and then be reported as a
             // missed correction. Nudge the loop so it takes the turn that
             // delivers it, the same way a queued user prompt restarts an idle
             // conversation.
             if !child.isProcessing {
-                logger.info("[subagent_task] steer arrived while child \(cid.prefix(8)) was idle 鈥?nudging its loop")
+                logger.info("[subagent_task] steer arrived while child \(cid.prefix(8)) was idle — nudging its loop")
                 _ = child.submitProgrammaticPrompt(Self.steerNudgePrompt,
                                                    origin: .job(jobId: job.id), silent: true)
             }
@@ -734,7 +734,7 @@ extension AIChatViewModel {
             // its absence is not a claim that a steer landed.
             if !job.missedSteers.isEmpty {
                 d["missed_steer"] = job.missedSteers
-                d["missed_steer_note"] = "The run ended before reading these 鈥?the result does not reflect them."
+                d["missed_steer_note"] = "The run ended before reading these — the result does not reflect them."
             }
             if let cid = job.runSessionId, job.state == .running,
                let vm = ViewModelCache.shared.get(for: cid) {
@@ -761,12 +761,12 @@ extension AIChatViewModel {
             "action": action,
             "count": entries.count,
             "agents": entries,
-            // [T-sub-agents-queue] Waiting for a slot, not yet a job 鈥?so they
+            // [T-sub-agents-queue] Waiting for a slot, not yet a job — so they
             // have no entry above. Reported so the model can see that work it
             // delegated is still coming and must not be delegated again.
             "queued": queuedWaiting,
             "note": "Running agents deliver their final result automatically as a new message in this conversation; you do not need to poll for it."
-                + (queuedWaiting > 0 ? " \(queuedWaiting) more are queued and will start as slots free 鈥?do not re-delegate them." : ""),
+                + (queuedWaiting > 0 ? " \(queuedWaiting) more are queued and will start as slots free — do not re-delegate them." : ""),
         ]
         return (Self.jsonString(out), true)
     }
@@ -775,10 +775,10 @@ extension AIChatViewModel {
 
     /// The parent turn ends immediately; the child keeps running. Completion
     /// is closed by the registry (loop-end observer or the watcher below),
-    /// which runs `then: .followUpParent` 鈫?`submitProgrammaticPrompt` into
+    /// which runs `then: .followUpParent` → `submitProgrammaticPrompt` into
     /// the parent. If the parent is mid-turn at that moment the prompt is
-    /// queued and drained by its epilogue or by P0's idle-drain rescue 鈥?the
-    /// exact race the schedule design's 搂2.4.1 was written for.
+    /// queued and drained by its epilogue or by P0's idle-drain rescue — the
+    /// exact race the schedule design's §2.4.1 was written for.
     private func startBackgroundHelper(job: AgentJob, child: AIChatViewModel, childId: String,
                                        toolUseId: String, resolution: HelperModelResolution,
                                        modelOrigin: HelperModelOrigin, minutes: Int, title: String,
@@ -792,7 +792,7 @@ extension AIChatViewModel {
             while !Task.isCancelled, child.isProcessing {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
                 // Re-check AFTER the sleep: the completion hook cancels this
-                // task and writes the final JSON while we may be asleep 鈥?a
+                // task and writes the final JSON while we may be asleep — a
                 // write here would overwrite it with a stale progress line
                 // (device run 19:41: cancelled block still read "running").
                 guard !Task.isCancelled, child.isProcessing, let self else { return }
@@ -809,7 +809,7 @@ extension AIChatViewModel {
         }
 
         // Final JSON into the parent block once the job closes, whichever
-        // path closes it. Located by tool_use id 鈥?the block index is not
+        // path closes it. Located by tool_use id — the block index is not
         // stable across a reload.
         job.completionHook = { [weak self] finished in
             mirror.cancel()
@@ -819,7 +819,7 @@ extension AIChatViewModel {
             self.syncHelperModel(job: finished, child: child, toolUseId: toolUseId)
             let result = finished.resultText ?? ""
             // [T-subagent-no-deliverable-status] Same reclassification as the
-            // wait-mode path above 鈥?a background run that ends `done` with no
+            // wait-mode path above — a background run that ends `done` with no
             // text is the SAME outcome and must not report a green "Done"
             // either. Kept as one shared helper so the two paths cannot drift.
             let loopStatus = finished.state == .done ? "completed" : finished.state.rawValue
@@ -880,7 +880,7 @@ extension AIChatViewModel {
             let watcher = Task { @MainActor in
                 // Current value first: the child can fail between `.sent` and
                 // this task starting, and `.values` only yields on the next
-                // publish 鈥?waiting for one that never comes would leave the
+                // publish — waiting for one that never comes would leave the
                 // job `running` forever.
                 if !child.isProcessing { return }
                 for await processing in child.$isProcessing.values where !processing { break }
@@ -900,22 +900,22 @@ extension AIChatViewModel {
             if timedOut, child.isProcessing {
                 // [T-agent-wrapup-turn] Ask for the deliverable first; cancel
                 // only if the wrap-up turn does not finish within the grace.
-                logger.warning("[delegate_task] BACKGROUND budget over after \(minutes)m 鈥?asking child \(childId.prefix(8)) to wrap up")
+                logger.warning("[delegate_task] BACKGROUND budget over after \(minutes)m — asking child \(childId.prefix(8)) to wrap up")
                 if await !Self.awaitHelperWrapUp(child, childId: childId) {
-                    logger.warning("[delegate_task] BACKGROUND TIMEOUT (+grace) 鈥?cancelling child \(childId.prefix(8))")
+                    logger.warning("[delegate_task] BACKGROUND TIMEOUT (+grace) — cancelling child \(childId.prefix(8))")
                     cancelledForTimeout = true
                     child.cancel()
                     // [T-sub-agents-busy] Bounded wait, NOT a bare
-                    // `for await 鈥?isProcessing.values`: that waits for the
+                    // `for await …$isProcessing.values`: that waits for the
                     // next PUBLISH, so if cancel() already settled the child
                     // (or it finished on its own in the same instant) nothing
-                    // is ever emitted and this task hangs 鈥?leaving the job
+                    // is ever emitted and this task hangs — leaving the job
                     // pinned to `running` for the life of the process, which
                     // now also pins the composer to Stop. awaitChildIdle
                     // checks the current value first and gives up after the
                     // grace period regardless.
                     if await !Self.awaitChildIdle(child, seconds: Self.helperWrapUpGraceSeconds) {
-                        logger.warning("[delegate_task] child \(childId.prefix(8)) still processing after cancel 鈥?closing the job anyway")
+                        logger.warning("[delegate_task] child \(childId.prefix(8)) still processing after cancel — closing the job anyway")
                     }
                 }
             }
@@ -941,8 +941,9 @@ extension AIChatViewModel {
             "child_session_id": childId,
             // [T-subagent-resume-agent-name] Which named sub agent is running.
             //
-            // The two COMPLETION payloads have always carried this; this one 鈥?            // the only payload persisted while a job is still RUNNING, which is
-            // precisely the state a resume recovers from 鈥?did not. So a run
+            // The two COMPLETION payloads have always carried this; this one —
+            // the only payload persisted while a job is still RUNNING, which is
+            // precisely the state a resume recovers from — did not. So a run
             // interrupted by a restart left the parent's stored tool_result
             // with no record of the agent, `resumeInterruptedHelper` read nil,
             // and the resume silently fell back to the built-in: a task
@@ -953,13 +954,13 @@ extension AIChatViewModel {
             "budget_minutes": minutes,
             "converted_from_wait": converted,
             "note": converted
-                ? "The user sent a new message while you were waiting, so this delegation was moved to the background. Answer the user now; the agent's result will arrive as a NEW MESSAGE in this conversation (prefixed [Background task finished 鈥) when it is done. Use agent_status if you need its current state."
-                : "The agent is running in the background. Its result will arrive as a NEW MESSAGE in this conversation (prefixed [Background task finished 鈥) when it is done 鈥?end this turn when you have nothing else to do. Use agent_status to check on it or cancel it; do not poll in a loop.",
+                ? "The user sent a new message while you were waiting, so this delegation was moved to the background. Answer the user now; the agent's result will arrive as a NEW MESSAGE in this conversation (prefixed [Background task finished …]) when it is done. Use agent_status if you need its current state."
+                : "The agent is running in the background. Its result will arrive as a NEW MESSAGE in this conversation (prefixed [Background task finished …]) when it is done — end this turn when you have nothing else to do. Use agent_status to check on it or cancel it; do not poll in a loop.",
         ]
         // This JSON is what the parent persists as the tool_result, so a
         // block reloaded after a restart still knows tier + resolved model
         // (and whatever effective model was confirmed before the parent
-        // turn ended 鈥?a wait鈫抌ackground conversion happens mid-run).
+        // turn ended — a wait→background conversion happens mid-run).
         syncHelperModel(job: job, child: child, toolUseId: toolUseId)
         if let identity = job.modelIdentity {
             payload.merge(identity.payload()) { _, new in new }
@@ -971,7 +972,7 @@ extension AIChatViewModel {
         return (json, true)
     }
 
-    // MARK: - Run summary (tools 路 turns 路 tokens)
+    // MARK: - Run summary (tools · turns · tokens)
 
     /// One line the parent model can read at a glance, built from the child
     /// vm's in-memory transcript (tool blocks) and its token counters.
@@ -995,12 +996,12 @@ extension AIChatViewModel {
                 counts[name, default: 0] += 1
             }
         }
-        let tools = order.isEmpty ? "none yet" : order.map { "\($0)脳\(counts[$0] ?? 0)" }.joined(separator: ", ")
+        let tools = order.isEmpty ? "none yet" : order.map { "\($0)×\(counts[$0] ?? 0)" }.joined(separator: ", ")
         let stats = child.sessionTokenStats
         func k(_ n: Int) -> String { n >= 1000 ? String(format: "%.1fk", Double(n) / 1000) : "\(n)" }
         var tokens = "in \(k(stats.input)) / out \(k(stats.output))"
         if stats.cacheRead > 0 { tokens += " (cache read \(k(stats.cacheRead)))" }
-        return "Summary: tools \(tools) 路 turns \(stats.loopCount) 路 tokens \(tokens)"
+        return "Summary: tools \(tools) · turns \(stats.loopCount) · tokens \(tokens)"
     }
 
     // MARK: - Progress reports (T-p2-progress-report)
@@ -1009,7 +1010,7 @@ extension AIChatViewModel {
     static let progressIntervalModerate: TimeInterval = 60
     static let progressLastMessageMaxChars = 800
 
-    /// Periodically inject a `[Background task progress 路 鈥` user message
+    /// Periodically inject a `[Background task progress · …]` user message
     /// into the parent so the parent model can react mid-run. "frequent"
     /// reports every 15s only when something changed (tool, status, last
     /// message, turn); "moderate" reports every 60s regardless. A report that
@@ -1034,7 +1035,7 @@ extension AIChatViewModel {
                 let lastMessage = SendPromptResponseParsing.extractResponseText(from: child)
                 let signature = "\(info?.toolName ?? "")|\(info?.toolStatus ?? "")|\(info?.loopIteration ?? 0)|\(lastMessage.prefix(200))"
                 if onlyOnChange, signature == job.lastProgressSignature {
-                    logger.info("[delegate_task] progress \(job.id.prefix(8)) unchanged 鈥?skipped")
+                    logger.info("[delegate_task] progress \(job.id.prefix(8)) unchanged — skipped")
                     continue
                 }
                 job.lastProgressSignature = signature
@@ -1086,11 +1087,11 @@ extension AIChatViewModel {
     /// The real case (2026-09-07 19:59:08.9, one-second window): the parent had
     /// several `subagent_task` calls open in the same turn. The user pressed
     /// Stop on ONE card; that path cancels by CHILD session id, so it correctly
-    /// silenced that child 鈥?but a sibling had reported `success` 48ms earlier
+    /// silenced that child — but a sibling had reported `success` 48ms earlier
     /// and its result was still on its way into `agentHistory`. The loop's
     /// existing `userDidCancel` break never fired, because the card's Stop
     /// never touched the parent. The parent sent the sibling's result to the
-    /// model, which read a completed sub-task and delegated a fresh one 鈥?a new
+    /// model, which read a completed sub-task and delegated a fresh one — a new
     /// "starting" card appeared seconds after the user thought they had stopped
     /// everything.
     ///
@@ -1110,7 +1111,7 @@ extension AIChatViewModel {
     /// arrived may drive the parent's loop on to another turn.
     ///
     /// Pure and static so the rule can be tested without a view model, a
-    /// session or a running loop 鈥?the real case is a sub-second race between
+    /// session or a running loop — the real case is a sub-second race between
     /// a Stop and a sibling's completion, which is impractical to stage live.
     ///
     /// - Parameters:
@@ -1128,7 +1129,7 @@ extension AIChatViewModel {
     func muteDelegationResults(reason: String) {
         guard !delegationResultsMuted else { return }
         delegationResultsMuted = true
-        logger.info("[delegate_task] parent \(self.sessionId?.prefix(8) ?? "nil") muted for sub agent results 鈥?\(reason)")
+        logger.info("[delegate_task] parent \(self.sessionId?.prefix(8) ?? "nil") muted for sub agent results — \(reason)")
     }
 
     /// Locate a block by tool_use id across the message list (background
@@ -1136,7 +1137,8 @@ extension AIChatViewModel {
     /// [T-agent-result-persist] A background delegate_task returned
     /// `status: running` as its tool_result, and that is what got persisted
     /// (history + DB). writeParentBlock only updates the live block, so after
-    /// an app restart the block reloaded from the DB still said "running" 鈥?    /// shown as "Interrupted" 鈥?although the job had finished and the parent
+    /// an app restart the block reloaded from the DB still said "running" —
+    /// shown as "Interrupted" — although the job had finished and the parent
     /// had already been called back. Rewrite the stored tool_result too, in
     /// the model-facing history and in the parent's DB row.
     private func persistFinalDelegateResult(toolUseId: String, content: String, status: ToolBlockStatus) {
@@ -1154,7 +1156,7 @@ extension AIChatViewModel {
         // the agents, not to lose the record of what the ones already finished
         // came back with, and the block stays readable in the transcript.
         if delegationResultsAreMuted {
-            logger.info("[delegate_task] parent stopped 鈥?result for \(toolUseId.prefix(12)) kept for display, withheld from agentHistory")
+            logger.info("[delegate_task] parent stopped — result for \(toolUseId.prefix(12)) kept for display, withheld from agentHistory")
         } else {
             for i in agentHistory.indices {
                 for j in agentHistory[i].parts.indices {
@@ -1182,13 +1184,13 @@ extension AIChatViewModel {
                 logger.info("[delegate_task] persisted final result into message \(raw.id.prefix(8)) tool=\(toolUseId.prefix(12))")
                 return
             }
-            logger.warning("[delegate_task] final result NOT persisted 鈥?no stored tool_result for \(toolUseId.prefix(12))")
+            logger.warning("[delegate_task] final result NOT persisted — no stored tool_result for \(toolUseId.prefix(12))")
         }
     }
 
     /// [T-agent-model-identity] Fold the child's latest served turn into the
     /// job's identity and mirror it onto the parent block (located by
-    /// tool_use id 鈥?indices go stale across the parent's later turns).
+    /// tool_use id — indices go stale across the parent's later turns).
     /// Publishes only on change so the block does not re-render every tick.
     func syncHelperModel(job: AgentJob, child: AIChatViewModel, toolUseId: String?) {
         guard var identity = job.modelIdentity else { return }
@@ -1223,11 +1225,11 @@ extension AIChatViewModel {
     static func progressLine(title: String, tool: String, status: String, elapsed: TimeInterval) -> String {
         let s = Int(elapsed)
         let clock = String(format: "%d:%02d", s / 60, s % 60)
-        var parts = ["鈼?\(AppLocalized("Agent")) 路 \(title)"]
+        var parts = ["◐ \(AppLocalized("Agent")) · \(title)"]
         if !tool.isEmpty { parts.append(tool) }
         if !status.isEmpty { parts.append(String(status.prefix(80))) }
         parts.append(clock)
-        return parts.joined(separator: " 路 ")
+        return parts.joined(separator: " · ")
     }
 
     static func jsonString(_ obj: [String: Any]) -> String {
@@ -1241,9 +1243,10 @@ extension AIChatViewModel {
     ///
     /// Why the in-memory block cannot answer this: while a delegation runs, a
     /// mirror task rewrites the parent block's `content` once a second with a
-    /// progress line ("鈼?Agent 路 title 路 鈥?m:ss"). `parseDelegateResult`
+    /// progress line ("◐ Agent · title · … m:ss"). `parseDelegateResult`
     /// requires a leading `{`, so it returns nil for exactly the blocks a
-    /// resume cares about. `AssistantBlock.helperAgentName` is no help either 鈥?    /// it is `@Published` UI state that nothing writes to the database, so a
+    /// resume cares about. `AssistantBlock.helperAgentName` is no help either —
+    /// it is `@Published` UI state that nothing writes to the database, so a
     /// restart loses it.
     ///
     /// The tool_result row, by contrast, holds the JSON the delegation returned
@@ -1251,12 +1254,12 @@ extension AIChatViewModel {
     /// `persistFinalDelegateResult` when the job ENDS, so for an interrupted
     /// run it still holds the start payload.
     ///
-    /// Returns nil only when NO row for this tool id carries a name 鈥?e.g. a
+    /// Returns nil only when NO row for this tool id carries a name — e.g. a
     /// delegation started by a build older than [T-subagent-resume-agent-name],
     /// whose start payload has no `"agent"` at all. That lands on the same
     /// built-in fallback as before, which is no worse than the old behaviour.
     /// Rows that merely happen to lack a name (control-call results, progress
-    /// lines) are skipped, not treated as an answer 鈥?see the scan below.
+    /// lines) are skipped, not treated as an answer — see the scan below.
     static func persistedAgentName(toolUseId: String, sessionId: String) async -> String? {
         let raws = await ChatStore.shared.loadMessages(sessionId: sessionId)
         for raw in raws where raw.role == .user {
@@ -1273,7 +1276,7 @@ extension AIChatViewModel {
                 // NSNull serialises to JSON `null`, so `obj["agent"] as? String`
                 // is nil for them. A progress line fails `parseDelegateResult`
                 // the same way. Either one appearing before the start payload
-                // sent the resume to the built-in 鈥?the reported "delegated to a
+                // sent the resume to the built-in — the reported "delegated to a
                 // named agent, came back as General Sub Agent".
                 //
                 // Skipping instead means the scan finds the start payload
@@ -1295,14 +1298,14 @@ extension AIChatViewModel {
         return obj
     }
 
-    /// System-prompt preamble for a helper vm 鈥?replaces the SOUL identity
+    /// System-prompt preamble for a helper vm — replaces the SOUL identity
     /// section. Mirrors the `minis-model-use` wording that fixed OpenMinis#103
     /// (identity pollution): describe the environment, do not assign identity.
     var helperIdentitySection: String {
         guard let cfg = helperConfig else { return "" }
         return """
-        You are running as a helper (sub-agent) inside an app called Minis, on an iOS device with a fully functional iSH Linux shell (Alpine Linux, aarch64). This is the calling environment, not your identity 鈥?keep your own model identity unchanged.
-        A parent agent delegated ONE focused task to you: "\(cfg.title)". You cannot see the parent conversation and it cannot see yours; everything you need is in the task text. Work the task to completion using your tools, then finish with a single clear final answer 鈥?that final message is returned verbatim to the parent agent as the result, and it is the ONLY thing the parent receives. So the final message must contain the complete deliverable itself: the full report, document, list, code or answer the task asked for, in full 鈥?never a summary of what you did, a pointer to a file you wrote, or "see above". If you produced a file, paste its full content into the final message as well. Do not ask the parent or the user questions; make reasonable assumptions and state them. Do not restate the task or add meta-commentary.
+        You are running as a helper (sub-agent) inside an app called Minis, on an iOS device with a fully functional iSH Linux shell (Alpine Linux, aarch64). This is the calling environment, not your identity — keep your own model identity unchanged.
+        A parent agent delegated ONE focused task to you: "\(cfg.title)". You cannot see the parent conversation and it cannot see yours; everything you need is in the task text. Work the task to completion using your tools, then finish with a single clear final answer — that final message is returned verbatim to the parent agent as the result, and it is the ONLY thing the parent receives. So the final message must contain the complete deliverable itself: the full report, document, list, code or answer the task asked for, in full — never a summary of what you did, a pointer to a file you wrote, or "see above". If you produced a file, paste its full content into the final message as well. Do not ask the parent or the user questions; make reasonable assumptions and state them. Do not restate the task or add meta-commentary.
         Browser: the browser is shared with the parent and with other agents. You may only use your own tabs (up to \(BrowserTabPool.agentTabQuota)); list_tabs shows just yours. To open a page, navigate (a tab of yours is picked or created) or use new_tab; never guess tab ids you did not receive, and reuse your tabs by navigating them instead of opening more.
         You have at most \(cfg.maxTurns) tool rounds; on the last one tools are withdrawn and you are asked to write the deliverable from what you have, so start writing before you run out. If the task genuinely exceeds what you can do at your capability level, end your final message with a line `[ESCALATE] <one-line reason>` so the parent can rerun it on a stronger model.
         \(Self.subAgentInstructionsSection(cfg.subAgentInstructions))
@@ -1310,7 +1313,8 @@ extension AIChatViewModel {
     }
 
     /// [T-sub-agents-v1] The user's standing instructions for the sub agent
-    /// running this task. Built-in and custom definitions take the SAME path 鈥?    /// the built-in's instructions are the "every unnamed delegation" default
+    /// running this task. Built-in and custom definitions take the SAME path —
+    /// the built-in's instructions are the "every unnamed delegation" default
     /// and are deliberately NOT stacked onto a custom agent, which would make a
     /// custom agent's behaviour depend on text on another settings page.
     static func subAgentInstructionsSection(_ instructions: String) -> String {
@@ -1328,7 +1332,7 @@ extension AIChatViewModel {
     /// [T-sub-agents-queue] Start a delegation that had been waiting for a slot.
     ///
     /// The original tool call returned `status: queued` long ago, so there is no
-    /// tool_result to produce here 鈥?the run reports through the job's normal
+    /// tool_result to produce here — the run reports through the job's normal
     /// completion callback. Locating the parent block by `toolUseId` (rather
     /// than the msg/block indices the original call had) is what makes this
     /// safe: those indices go stale while the delegation sits in the queue.
@@ -1340,12 +1344,12 @@ extension AIChatViewModel {
         if let childId = args["__resume_child"] as? String {
             let failure = await resumeInterruptedHelper(childSessionId: childId)
             if let failure {
-                logger.warning("[subagent_task] queued resume failed 鈥?\(failure)")
+                logger.warning("[subagent_task] queued resume failed — \(failure)")
             }
             return failure == nil
         }
         guard let (msgIdx, blockIdx) = blockIndices(forToolUseId: toolUseId) else {
-            logger.warning("[subagent_task] queued start abandoned 鈥?block \(toolUseId.prefix(12)) is gone")
+            logger.warning("[subagent_task] queued start abandoned — block \(toolUseId.prefix(12)) is gone")
             return false
         }
         // Mark this as a re-entry from the queue. Without it the per-turn
@@ -1384,20 +1388,20 @@ extension AIChatViewModel {
     /// calls browser_use on a tab that no longer exists and burns rounds
     /// rediscovering that.
     static let helperResumeNotice = """
-    [This run was interrupted and has been resumed. The tool results above are still valid, but all live state is gone: browser tabs are closed, shell processes have ended, and anything unsaved is lost. Files in the workspace are still there. Continue from what the transcript already establishes 鈥?reopen pages or re-run commands when you need them, and do not assume anything is still open.]
+    [This run was interrupted and has been resumed. The tool results above are still valid, but all live state is gone: browser tabs are closed, shell processes have ended, and anything unsaved is lost. Files in the workspace are still there. Continue from what the transcript already establishes — reopen pages or re-run commands when you need them, and do not assume anything is still open.]
     """
 
     /// [T-sub-agents-resume] Restart an interrupted sub agent from its own
     /// transcript, reporting back into the SAME parent block.
     ///
-    /// Nothing is read from a persisted registry, because there isn't one 鈥?the
+    /// Nothing is read from a persisted registry, because there isn't one — the
     /// registry is in-memory by design. Every field is rebuilt from what is
     /// already on disk: the child session row carries the parent's id and the
     /// tool_use id, and the parent block's result JSON carries the title and
     /// the sub agent's name.
     ///
     /// - Returns: nil on success, or a short reason the caller can surface.
-    /// [T-sub-agents-resume] `subagent_task action=resume` 鈥?the model's own
+    /// [T-sub-agents-resume] `subagent_task action=resume` — the model's own
     /// way to restart what the app lost, after a sibling callback told it some
     /// runs are interrupted.
     ///
@@ -1459,15 +1463,16 @@ extension AIChatViewModel {
                 // [T-subagent-control-not-lost] Skip control calls. `queued`
                 // means two unrelated things on two unrelated queues:
                 //
-                //   delegate 鈥?waiting for a CONCURRENCY SLOT in the registry's
+                //   delegate — waiting for a CONCURRENCY SLOT in the registry's
                 //     in-memory `queuedDelegations`. That queue dies with the
                 //     process and holds the only copy of the arguments, so a
                 //     restart really does mean "never started": the check below
                 //     is right for it.
-                //   steer    鈥?waiting for the CHILD to read it on its next
+                //   steer    — waiting for the CHILD to read it on its next
                 //     turn (`child.pendingSteerMessages`). Nothing ever puts it
                 //     in `queuedDelegations`, so `isQueued` was false from the
-                //     first scan onward 鈥?not after a restart, immediately 鈥?                //     and every steer was flagged the moment this ran.
+                //     first scan onward — not after a restart, immediately —
+                //     and every steer was flagged the moment this ran.
                 //
                 // That is the reported contradiction: a yellow "Never started"
                 // badge over a result that reads "Queued. The sub agent reads
@@ -1488,7 +1493,7 @@ extension AIChatViewModel {
             }
         }
         if lost > 0 {
-            logger.warning("[subagent_task] \(lost) queued delegation(s) lost with the previous process 鈥?flagged as never started")
+            logger.warning("[subagent_task] \(lost) queued delegation(s) lost with the previous process — flagged as never started")
         }
     }
 
@@ -1523,7 +1528,7 @@ extension AIChatViewModel {
             return nil
         }
 
-        // 鈹€鈹€ Rebuild the identity from persisted state 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+        // ── Rebuild the identity from persisted state ────────────────────
         guard let childSession = await ChatStore.shared.getSession(childId),
               let toolUseId = childSession.parentToolUseId,
               childSession.parentSessionId == parentSid else {
@@ -1553,7 +1558,7 @@ extension AIChatViewModel {
         // result records which one actually ran.
         //
         // [T-subagent-resume-agent-name] `payload` is nil whenever the parent
-        // block's content is a progress line rather than JSON 鈥?which is the
+        // block's content is a progress line rather than JSON — which is the
         // normal state of a RUNNING delegation, and therefore the normal state
         // of anything worth resuming. The name is recovered from the persisted
         // tool_result instead; see `resumeAgentName`.
@@ -1573,7 +1578,7 @@ extension AIChatViewModel {
                 // does the user is told which name went missing rather than
                 // being handed a General Sub Agent with no explanation.
                 namedAgentMissing = agentName
-                logger.warning("[subagent_task] RESUME agent \"\(agentName)\" no longer exists 鈥?falling back to the built-in")
+                logger.warning("[subagent_task] RESUME agent \"\(agentName)\" no longer exists — falling back to the built-in")
             }
         }
 
@@ -1581,7 +1586,7 @@ extension AIChatViewModel {
             return "no model is configured to run it on"
         }
 
-        // 鈹€鈹€ Slot / queue, exactly as a fresh delegation 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+        // ── Slot / queue, exactly as a fresh delegation ──────────────────
         guard registry.canStartChildJob else {
             let args: [String: Any] = ["__resume_child": childId, "tool_title": title]
             _ = registry.enqueueDelegation(.init(parentSessionId: parentSid, args: args, toolUseId: toolUseId))
@@ -1594,8 +1599,8 @@ extension AIChatViewModel {
             return nil
         }
 
-        // 鈹€鈹€ Child VM 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-        // [T-vmcache-pools] Resume path 鈥?same child pool as the start path.
+        // ── Child VM ─────────────────────────────────────────────────────
+        // [T-vmcache-pools] Resume path — same child pool as the start path.
         let (child, fresh) = ViewModelCache.shared.getOrCreate(for: childId, kind: .child)
         if fresh || child.messages.isEmpty { await child.loadSession() }
         child.sessionSource = sessionSource
@@ -1624,7 +1629,7 @@ extension AIChatViewModel {
         ProviderConfigStore.shared.setBinding(
             SessionModelBinding(sessionId: childId, primarySource: resolution.source), for: childId)
         // [T-subagent-thinking-inherit] A resumed run re-resolves its model, so
-        // it re-seeds the level too 鈥?otherwise resuming an interrupted sub
+        // it re-seeds the level too — otherwise resuming an interrupted sub
         // agent would silently drop it back to `.off` for the rest of the run.
         Self.seedChildThinkingLevel(childId: childId, parentSessionId: parentSid,
                                     resolution: resolution, subAgent: subAgent)
@@ -1633,7 +1638,8 @@ extension AIChatViewModel {
         // same link the fresh delegation makes at the top of this file.
         // Without it the block keeps a nil `helperChildSessionId`, and every
         // surface that reaches the child through it goes dead: the detail
-        // sheet's transcript button did nothing, because its only fallback 鈥?        // parsing the child id back out of the block's JSON result 鈥?stops
+        // sheet's transcript button did nothing, because its only fallback —
+        // parsing the child id back out of the block's JSON result — stops
         // working the moment the resumed run overwrites `content` with a
         // progress line.
         for msg in messages where msg.role == .assistant {
@@ -1645,7 +1651,7 @@ extension AIChatViewModel {
             }
         }
 
-        // 鈹€鈹€ Continue the run 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+        // ── Continue the run ─────────────────────────────────────────────
         // The notice goes in as a normal programmatic prompt, so the child
         // reads it at the top of its next turn like any other injected text.
         let outcome = child.submitProgrammaticPrompt(Self.helperResumeNotice,
@@ -1670,7 +1676,7 @@ extension AIChatViewModel {
         // invisible. Uses the existing transient-banner channel rather than the
         // return value, which every caller treats strictly as "resume failed".
         if let missing = namedAgentMissing {
-            transientNotice = String(format: AppLocalized("Sub agent \"%@\" no longer exists 鈥?resumed with the built-in agent"), missing)
+            transientNotice = String(format: AppLocalized("Sub agent \"%@\" no longer exists — resumed with the built-in agent"), missing)
         }
         logger.info("[subagent_task] RESUME job=\(job.id.prefix(8)) child=\(childId.prefix(8)) parent=\(parentSid.prefix(8)) agent=\(subAgent.name) recovered=\(agentName ?? "nil")")
 
