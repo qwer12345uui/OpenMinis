@@ -5,7 +5,7 @@ on:
 
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 240
 
     steps:
@@ -19,6 +19,12 @@ jobs:
           xcodebuild -version
           xcrun -sdk iphoneos --show-sdk-version || true
           clang --version | head -1
+
+      - name: Restore executable bits on build scripts
+        run: |
+          set -euo pipefail
+          chmod +x deps/*.sh scripts/*.sh scripts/*.py 2>/dev/null || true
+          find deps -maxdepth 3 \( -name configure -o -name install-sh -o -name config.guess -o -name config.sub -o -name compile -o -name depcomp -o -name missing \) -exec chmod +x {} + 2>/dev/null || true
 
       - name: Install native build dependencies
         run: |
