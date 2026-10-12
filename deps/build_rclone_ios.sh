@@ -7,12 +7,12 @@
 #
 # The simulator slice matters: libish_emu.a is device-only, which already
 # prevents building this app for the Simulator. rclone must not become a
-# SECOND reason 鈥?if the iSH constraint is ever lifted, this should not be
+# SECOND reason — if the iSH constraint is ever lifted, this should not be
 # what blocks it.
 #
 # Which backends get linked is decided by deps/rclone-mobile/backends/backends.go,
 # not here. rclone itself is a go.mod dependency (pinned version), never
-# vendored 鈥?upgrading is a one-line change to that file.
+# vendored — upgrading is a one-line change to that file.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
