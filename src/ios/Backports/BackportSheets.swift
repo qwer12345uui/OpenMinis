@@ -4,7 +4,7 @@ import UIKit
 // MARK: - PresentationDetent (iOS 15 backport)
 
 /// Backport of SwiftUI's `PresentationDetent` (iOS 16+).
-public struct PresentationDetent: Hashable {
+public enum PresentationDetent: Hashable {
     case medium
     case large
     case fraction(CGFloat)
