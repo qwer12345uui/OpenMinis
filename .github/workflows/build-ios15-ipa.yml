@@ -1,0 +1,85 @@
+name: Build iOS 15 IPA
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 240
+
+    steps:
+      - name: Checkout (with native-dep submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          xcrun -sdk iphoneos --show-sdk-version || true
+          clang --version | head -1
+
+      - name: Install native build dependencies
+        run: |
+          set -euo pipefail
+          brew install ninja llvm libarchive pkg-config go
+          python3 -m pip install meson --break-system-packages 2>/dev/null || python3 -m pip install meson
+          echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
+
+      - name: Install Metal Toolchain (best effort)
+        run: xcodebuild -downloadComponent MetalToolchain || echo "Metal toolchain unavailable — FFmpeg will drop the Metal deinterlace filter (non-fatal)"
+
+      - name: Cache native dependency artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            deps/lame-build
+            deps/frameworks
+            deps/libs
+            deps/include
+            deps/resources
+            deps/rclone-build
+          key: minis-native-deps-${{ runner.os }}-${{ hashFiles('deps/*.sh') }}
+
+      - name: Build native dependencies (LAME → FFmpeg → iSH → rootfs → rclone)
+        run: |
+          set -euo pipefail
+          ./deps/build_lame.sh
+          ./deps/build_ffmpeg.sh
+          ./deps/build_ish.sh
+          ./deps/prepare_alpine_rootfs.sh
+          ./deps/build_rclone_ios.sh
+
+      - name: Build Minis.app (unsigned, iOS 15.0 deployment target)
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project src/ios/Minis.xcodeproj \
+            -scheme Minis \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            IPHONEOS_DEPLOYMENT_TARGET=15.0 \
+            build
+
+      - name: Package unsigned IPA
+        run: |
+          set -euo pipefail
+          APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' | head -n 1)
+          echo "App bundle: $APP"
+          test -n "$APP"
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+          zip -qry OpenMinis-iOS15-unsigned.ipa Payload
+          ls -lh OpenMinis-iOS15-unsigned.ipa
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenMinis-iOS15-unsigned-ipa
+          path: OpenMinis-iOS15-unsigned.ipa
+          if-no-files-found: error
