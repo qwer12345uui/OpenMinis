@@ -51,6 +51,8 @@ jobs:
       - name: Build native dependencies (LAME → FFmpeg → iSH → rootfs → rclone)
         run: |
           set -euo pipefail
+          ls /opt/homebrew/opt/llvm/bin | grep -iE '^(ld|lld|wasm)' || true
+          command -v ld.lld || true
           ./deps/build_lame.sh
           ./deps/build_ffmpeg.sh
           ./deps/build_ish.sh
