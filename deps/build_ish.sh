@@ -32,6 +32,23 @@ OUTPUT_LIBS="$SCRIPT_DIR/libs"
 OUTPUT_INCLUDE="$SCRIPT_DIR/include"
 OUTPUT_RESOURCES="$SCRIPT_DIR/resources"
 
+# Prefer Homebrew LLVM (clang with bundled ld.lld) over Apple's toolchain.
+# The VDSO is linked with -fuse-ld=lld; Apple clang does not ship an ELF
+# ld.lld, so without this the link fails with "invalid linker name".
+for _LLVM_PREFIX in /opt/homebrew/opt/llvm /usr/local/opt/llvm; do
+    if [ -x "$_LLVM_PREFIX/bin/clang" ]; then
+        export PATH="$_LLVM_PREFIX/bin:$PATH"
+        break
+    fi
+done
+# Homebrew's libarchive is keg-only; make it visible to pkg-config.
+for _LA_PREFIX in /opt/homebrew/opt/libarchive /usr/local/opt/libarchive; do
+    if [ -d "$_LA_PREFIX/lib/pkgconfig" ]; then
+        export PKG_CONFIG_PATH="$_LA_PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+        break
+    fi
+done
+
 # Build configuration
 BUILD_TYPE="${1:-release}"
 ARCHS="arm64"

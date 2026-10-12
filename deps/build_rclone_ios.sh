@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env bash
+#!/usr/bin/env bash
 # Build rclone as a static library for iOS and package it as an XCFramework.
 #
 # Produces deps/frameworks/Rclone.xcframework with two slices:
