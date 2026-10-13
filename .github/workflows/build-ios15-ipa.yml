@@ -1,30 +1,76 @@
 name: Build iOS 15 IPA
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      deployment_target:
+        description: "iOS deployment target override (blank = use the project setting)"
+        required: false
+        default: ""
+      artifact_name:
+        description: "Artifact name"
+        required: false
+        default: "OpenMinis-unsigned-ipa"
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: macos-26
-    timeout-minutes: 240
+    timeout-minutes: 300
+
+    env:
+      DEV_TARGET: ${{ inputs.deployment_target }}
 
     steps:
       - name: Checkout (with native-dep submodules)
         uses: actions/checkout@v4
         with:
           submodules: recursive
-
-      - name: Show toolchain
-        run: |
-          xcodebuild -version
-          xcrun -sdk iphoneos --show-sdk-version || true
-          clang --version | head -1
+          fetch-depth: 1
 
       - name: Restore executable bits on build scripts
         run: |
           set -euo pipefail
-          chmod +x deps/*.sh scripts/*.sh scripts/*.py 2>/dev/null || true
+          chmod +x deps/*.sh 2>/dev/null || true
+          chmod +x scripts/*.sh 2>/dev/null || true
           find deps -maxdepth 3 \( -name configure -o -name install-sh -o -name config.guess -o -name config.sub -o -name compile -o -name depcomp -o -name missing \) -exec chmod +x {} + 2>/dev/null || true
+
+      - name: Preflight checks
+        run: |
+          set -euo pipefail
+          echo "::group::toolchain"
+          xcodebuild -version
+          xcrun -sdk iphoneos --show-sdk-version
+          clang --version | head -1
+          echo "::endgroup::"
+
+          echo "::group::submodules"
+          for d in deps/ish deps/proot; do
+            if [ -d "$d" ] && [ -n "$(ls -A "$d" 2>/dev/null)" ]; then
+              echo "OK      $d"
+            else
+              echo "MISSING $d  <-- submodule was not checked out; build will fail"
+              exit 1
+            fi
+          done
+          echo "::endgroup::"
+
+          echo "::group::project base configuration"
+          if [ ! -f src/ios/Configs/ProviderCustomization.xcconfig ]; then
+            cp src/ios/Configs/ProviderCustomization.xcconfig.example src/ios/Configs/ProviderCustomization.xcconfig
+            echo "Created src/ios/Configs/ProviderCustomization.xcconfig from the .example template."
+          else
+            echo "src/ios/Configs/ProviderCustomization.xcconfig already present."
+          fi
+          test -f src/ios/Configs/ProviderCustomization.xcconfig
+          echo "::endgroup::"
+
+          echo "::group::effective deployment targets"
+          awk -F' = ' '/IPHONEOS_DEPLOYMENT_TARGET/ {print $2}' src/ios/Minis.xcodeproj/project.pbxproj | tr -d ';' | sort | uniq -c
+          echo "requested override: '${DEV_TARGET:-<none>}'"
+          echo "::endgroup::"
 
       - name: Install native build dependencies
         run: |
@@ -34,7 +80,7 @@ jobs:
           echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
 
       - name: Install Metal Toolchain (best effort)
-        run: xcodebuild -downloadComponent MetalToolchain || echo "Metal toolchain unavailable — FFmpeg will drop the Metal deinterlace filter (non-fatal)"
+        run: xcodebuild -downloadComponent MetalToolchain || echo "Metal toolchain unavailable - FFmpeg will drop the Metal deinterlace filter (non-fatal)"
 
       - name: Cache native dependency artifacts
         uses: actions/cache@v4
@@ -48,10 +94,10 @@ jobs:
             deps/rclone-build
           key: minis-native-deps-${{ runner.os }}-${{ hashFiles('deps/*.sh') }}
 
-      - name: Build native dependencies (LAME → FFmpeg → iSH → rootfs → rclone)
+      - name: Build native dependencies (LAME -> FFmpeg -> iSH -> rootfs -> rclone)
         run: |
           set -euo pipefail
-          ls /opt/homebrew/opt/llvm/bin | grep -iE '^(ld|lld|wasm)' || true
+          ls /opt/homebrew/opt/llvm/bin | awk '/^(ld|lld|wasm)/' || true
           command -v ld.lld || true
           ./deps/build_lame.sh
           ./deps/build_ffmpeg.sh
@@ -59,10 +105,21 @@ jobs:
           ./deps/prepare_alpine_rootfs.sh
           ./deps/build_rclone_ios.sh
 
-      - name: Build Minis.app (unsigned, iOS 15.0 deployment target)
+      - name: Build Minis.app (unsigned)
         run: |
-          set -euo pipefail
-          test -f src/ios/Configs/ProviderCustomization.xcconfig || cp src/ios/Configs/ProviderCustomization.xcconfig.example src/ios/Configs/ProviderCustomization.xcconfig
+          set -uo pipefail
+          DEPLOY_ARG=""
+          if [ -n "${DEV_TARGET}" ]; then
+            DEPLOY_ARG="IPHONEOS_DEPLOYMENT_TARGET=${DEV_TARGET}"
+            echo "Forcing IPHONEOS_DEPLOYMENT_TARGET=${DEV_TARGET}"
+          else
+            echo "Using the deployment target configured in the project."
+          fi
+
+          set +e
+          # NOTE: ${DEPLOY_ARG} stays unquoted on purpose — an empty value must
+          # expand to zero arguments. macOS ships bash 3.2, where "${ARR[@]}" on
+          # an empty array trips `set -u`.
           xcodebuild \
             -project src/ios/Minis.xcodeproj \
             -scheme Minis \
@@ -72,22 +129,82 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            build
+            ${DEPLOY_ARG} \
+            build 2>&1 | tee xcodebuild.log
+          STATUS=${PIPESTATUS[0]}
+          set -e
+
+          awk '/: error: /' xcodebuild.log | sed 's/^[^ ]* //' | sort -u > errors.txt || true
+          : > error_summary.txt
+          if [ -s errors.txt ]; then
+            awk '/: error: /' xcodebuild.log | sed 's/^[^ ]* //' | sed 's/.*: error: //' | sort | uniq -c | sort -rn > error_summary.txt || true
+            echo "::group::distinct error signatures"
+            cat error_summary.txt
+            echo "::endgroup::"
+          fi
+
+          echo "xcodebuild exit status: $STATUS"
+          exit $STATUS
 
       - name: Package unsigned IPA
+        id: package
+        if: success()
         run: |
           set -euo pipefail
           APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' | head -n 1)
           echo "App bundle: $APP"
           test -n "$APP"
+          rm -rf Payload
           mkdir -p Payload
           cp -R "$APP" Payload/
-          zip -qry OpenMinis-iOS15-unsigned.ipa Payload
-          ls -lh OpenMinis-iOS15-unsigned.ipa
+          zip -qry OpenMinis-unsigned.ipa Payload
+          ls -lh OpenMinis-unsigned.ipa
+          unzip -l OpenMinis-unsigned.ipa | head -20
+          mkdir -p Payload 2>/dev/null || true
 
-      - name: Upload IPA artifact
+      - name: Collect build report
+        if: always()
+        run: |
+          set -uo pipefail
+          {
+            echo "# Build report"
+            echo
+            echo "- ref: ${GITHUB_REF}"
+            echo "- sha: ${GITHUB_SHA}"
+            echo "- deployment target override: '${DEV_TARGET:-<none>}'"
+            echo "- runner: $(sw_vers -productVersion) $(uname -m)"
+            echo "- xcodebuild exit: see xcodebuild.log"
+            echo
+            echo "## Distinct error signatures"
+            echo '```'
+            cat error_summary.txt 2>/dev/null || echo "(none)"
+            echo '```'
+            echo
+            echo "## Unique error lines"
+            echo '```'
+            head -400 errors.txt 2>/dev/null || echo "(none)"
+            echo '```'
+          } > build-report.md
+          ls -la xcodebuild.log errors.txt error_summary.txt build-report.md 2>/dev/null || true
+
+      - name: Upload IPA
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: OpenMinis-iOS15-unsigned-ipa
-          path: OpenMinis-iOS15-unsigned.ipa
+          name: ${{ inputs.artifact_name }}
+          path: OpenMinis-unsigned.ipa
           if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload build report (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}-build-report
+          path: |
+            build-report.md
+            errors.txt
+            error_summary.txt
+            xcodebuild.log
+          if-no-files-found: warn
+          retention-days: 14
