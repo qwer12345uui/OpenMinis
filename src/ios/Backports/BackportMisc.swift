@@ -104,7 +104,7 @@ public struct LabeledContent<Label: View, Value: View>: View {
     }
 }
 
-public extension LabeledContent where Label == Text {
+public extension LabeledContent where Label == Text, Value == Text {
     init(_ titleKey: LocalizedStringKey, value: some StringProtocol) {
         self.label = Text(titleKey)
         self.value = Text(String(value))
@@ -114,7 +114,9 @@ public extension LabeledContent where Label == Text {
         self.label = Text(String(title))
         self.value = Text(String(value))
     }
+}
 
+public extension LabeledContent where Label == Text {
     init(_ titleKey: LocalizedStringKey, @ViewBuilder content: () -> Value) {
         self.label = Text(titleKey)
         self.value = content()
@@ -447,7 +449,11 @@ public struct NavigationSplitView<Sidebar: View, Detail: View>: View {
 
     public var body: some View {
         if #available(iOS 16.0, *) {
-            SwiftUI.NavigationSplitView(columnVisibility: mappedVisibility, sidebar: { sidebar }, detail: { detail })
+            SwiftUI.NavigationSplitView(
+                columnVisibility: mappedVisibility ?? Binding.constant(SwiftUI.NavigationSplitViewVisibility.automatic),
+                sidebar: { sidebar },
+                detail: { detail }
+            )
         } else {
             NavigationView {
                 sidebar

@@ -16,18 +16,35 @@ import UniformTypeIdentifiers
 /// `Transferable` (iOS 16+) implement this instead; the app's
 /// `VideoFileTransferable` conforms to it (see ChatInputBar.swift).
 public protocol BackportTransferable {
-    static func backportLoad(from provider: NSItemProvider) async throws -> Self?
+    /// The type actually produced by `backportLoad`. Declared as an associated
+    /// type rather than `Self?` because `Self?` cannot be satisfied by a class
+    /// conformance (UIKit's `UIImage` is not final).
+    associatedtype BackportLoaded
+    static func backportLoad(from provider: NSItemProvider) async throws -> BackportLoaded?
 }
 
 extension Data: BackportTransferable {
     public static func backportLoad(from provider: NSItemProvider) async throws -> Data? {
-        if let data = try? await provider.loadDataRepresentation() {
-            return data
+        guard let identifier = provider.registeredTypeIdentifiers
+            .first(where: { provider.hasItemConformingToTypeIdentifier($0) })
+        else { return nil }
+        return try? await loadData(from: provider, identifier: identifier)
+    }
+
+    /// `loadDataRepresentation(forTypeIdentifier:)`'s async form is not
+    /// available on the iOS 15 deployment target, so bridge it by hand.
+    private static func loadData(from provider: NSItemProvider, identifier: String) async throws -> Data {
+        try await withCheckedThrowingContinuation { continuation in
+            provider.loadDataRepresentation(forTypeIdentifier: identifier) { data, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else if let data {
+                    continuation.resume(returning: data)
+                } else {
+                    continuation.resume(throwing: CocoaError(.fileReadUnknown))
+                }
+            }
         }
-        // Some providers only expose a concrete type identifier.
-        let identifiers = provider.registeredTypeIdentifiers
-        guard let first = identifiers.first else { return nil }
-        return try await provider.loadDataRepresentation(forTypeIdentifier: first)
     }
 }
 
@@ -100,7 +117,7 @@ public struct PhotosPickerItem: Hashable, Identifiable {
 
     /// Backport of `loadTransferable(type:)`. Works with `Data`, `UIImage`,
     /// `URL` and any type conforming to `BackportTransferable`.
-    public func loadTransferable<T: BackportTransferable>(type: T.Type) async throws -> T? {
+    public func loadTransferable<T: BackportTransferable>(type: T.Type) async throws -> T.BackportLoaded? {
         try await T.backportLoad(from: provider)
     }
 }

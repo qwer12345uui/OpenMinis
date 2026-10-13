@@ -217,6 +217,7 @@ extension EnvironmentValues {
 /// reconciled through the UINavigationController delegate.
 public struct NavigationStack<Content: View>: View {
     @StateObject private var ownedRouter = BackportNavRouter()
+    @State private var ownedPath = NavigationPath()
     private let pathBinding: Binding<NavigationPath>?
     private let content: Content
 

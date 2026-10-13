@@ -76,6 +76,13 @@ func AppLocalized(_ key: String.LocalizationValue, comment: StaticString? = nil)
 
 /// `LocalizedStringResource` overload, for call sites that already hold a
 /// resource (App Intents build these) rather than a literal key.
+///
+/// `LocalizedStringResource` is iOS 16+, so this overload is unavailable below
+/// that. The annotation is load-bearing on the iOS 15 deployment target: without
+/// it the compiler still considers this overload when resolving every plain
+/// `AppLocalized("literal")` call, and reports every one of them as an
+/// availability violation.
+@available(iOS 16.0, *)
 func AppLocalized(_ resource: LocalizedStringResource) -> String {
     // A LocalizedStringResource carries its own bundle reference, so it cannot
     // be re-pointed the way a literal key can. Resolve it as-is rather than

@@ -14,8 +14,12 @@ public struct UIHostingConfiguration<Content: View, Background: View>: UIContent
     var margins: UIEdgeInsets
     var minSize: CGSize?
 
-    public init(@ViewBuilder content: () -> Content) {
-        self.init(content: content, background: { EmptyView() })
+    public init(@ViewBuilder content: () -> Content) where Background == EmptyView {
+        self.content = content()
+        self.background = EmptyView()
+        // Real UIHostingConfiguration defaults: 11pt vertical, 16pt horizontal.
+        self.margins = UIEdgeInsets(top: 11, left: 16, bottom: 11, right: 16)
+        self.minSize = nil
     }
 
     public init(@ViewBuilder content: () -> Content, @ViewBuilder background: () -> Background) {
