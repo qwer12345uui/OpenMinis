@@ -492,3 +492,25 @@ public struct NavigationSplitView<Sidebar: View, Detail: View>: View {
         }
     }
 }
+
+// MARK: - Locale (iOS 15 fallbacks)
+
+public extension Locale {
+    /// iOS 15 fallback for `Locale.language.languageCode?.identifier` (iOS 16+).
+    /// `Locale.languageCode` carries the same value and has been available since
+    /// iOS 10; it is only *deprecated* on iOS 16+, never removed.
+    var backportLanguageCode: String? {
+        if #available(iOS 16.0, *) {
+            return language.languageCode?.identifier
+        }
+        return languageCode
+    }
+
+    /// iOS 15 fallback for `Locale.region?.identifier` (iOS 16+).
+    var backportRegionCode: String? {
+        if #available(iOS 16.0, *) {
+            return region?.identifier
+        }
+        return regionCode
+    }
+}
