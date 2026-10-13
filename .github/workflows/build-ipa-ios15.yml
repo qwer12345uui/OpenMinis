@@ -108,15 +108,18 @@ jobs:
       - name: Build Minis.app (unsigned)
         run: |
           set -uo pipefail
-          DEPLOY_ARGS=()
+          DEPLOY_ARG=""
           if [ -n "${DEV_TARGET}" ]; then
-            DEPLOY_ARGS+=("IPHONEOS_DEPLOYMENT_TARGET=${DEV_TARGET}")
+            DEPLOY_ARG="IPHONEOS_DEPLOYMENT_TARGET=${DEV_TARGET}"
             echo "Forcing IPHONEOS_DEPLOYMENT_TARGET=${DEV_TARGET}"
           else
             echo "Using the deployment target configured in the project."
           fi
 
           set +e
+          # NOTE: ${DEPLOY_ARG} stays unquoted on purpose — an empty value must
+          # expand to zero arguments. macOS ships bash 3.2, where "${ARR[@]}" on
+          # an empty array trips `set -u`.
           xcodebuild \
             -project src/ios/Minis.xcodeproj \
             -scheme Minis \
@@ -126,7 +129,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            "${DEPLOY_ARGS[@]}" \
+            ${DEPLOY_ARG} \
             build 2>&1 | tee xcodebuild.log
           STATUS=${PIPESTATUS[0]}
           set -e
