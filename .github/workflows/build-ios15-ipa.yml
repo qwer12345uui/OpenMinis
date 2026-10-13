@@ -134,10 +134,10 @@ jobs:
           STATUS=${PIPESTATUS[0]}
           set -e
 
-          awk '/: error: /' xcodebuild.log | sed 's/^[^ ]* //' | sort -u > errors.txt || true
+          awk '/: error: /' xcodebuild.log | sort -u > errors.txt || true
           : > error_summary.txt
           if [ -s errors.txt ]; then
-            awk '/: error: /' xcodebuild.log | sed 's/^[^ ]* //' | sed 's/.*: error: //' | sort | uniq -c | sort -rn > error_summary.txt || true
+            awk '/: error: /' xcodebuild.log | sed 's/.*: error: //' | sort | uniq -c | sort -rn > error_summary.txt || true
             echo "::group::distinct error signatures"
             cat error_summary.txt
             echo "::endgroup::"
