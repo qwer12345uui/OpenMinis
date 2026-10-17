@@ -194,13 +194,13 @@ struct LogManagementView: View {
             }
         }
         .toolbar {
-            if !vm.logFiles.isEmpty && tab == "logs" {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showShareSheet = true
-                    } label: {
-                        Image(systemName: "square.and.arrow.up")
-                    }
+            ToolbarItem(placement: .topBarTrailing) {
+                if !vm.logFiles.isEmpty && tab == "logs" {
+                        Button {
+                            showShareSheet = true
+                        } label: {
+                            Image(systemName: "square.and.arrow.up")
+                        }
                 }
             }
         }

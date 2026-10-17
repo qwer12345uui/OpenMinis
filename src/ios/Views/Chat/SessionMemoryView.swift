@@ -274,20 +274,20 @@ private struct MemoryContentView: View {
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if fileURL != nil {
-                ToolbarItem(placement: .topBarTrailing) {
-                    if isEditing {
-                        Button("Save") {
-                            save()
+            ToolbarItem(placement: .topBarTrailing) {
+                if fileURL != nil {
+                        if isEditing {
+                            Button("Save") {
+                                save()
+                            }
+                        } else {
+                            Button {
+                                editedContent = content
+                                isEditing = true
+                            } label: {
+                                Image(systemName: "pencil")
+                            }
                         }
-                    } else {
-                        Button {
-                            editedContent = content
-                            isEditing = true
-                        } label: {
-                            Image(systemName: "pencil")
-                        }
-                    }
                 }
             }
         }

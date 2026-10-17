@@ -488,34 +488,34 @@ private struct MarkdownFilePreview: View {
             }
         }
         .toolbar {
-            if case .loaded = loadState {
-                ToolbarItem(placement: .topBarLeading) {
-                    // Single toggle button, NOT a segmented Picker.
-                    //
-                    // A `.segmented` Picker asks for the width of all its
-                    // segments, but a toolbar item on iOS 26's Liquid Glass
-                    // bar is laid out as one round glass button. The control
-                    // got squeezed into that circular slot and drew both
-                    // segments on top of each other — the reported "two
-                    // overlapping, distorted icons" (screenshot
-                    // /tmp/md_preview_toggle_bug.jpg), not an animation stuck
-                    // mid-transition.
-                    //
-                    // A plain Button showing ONE icon is what a toolbar slot
-                    // is shaped for, and it matches the icon-swap toggles
-                    // used elsewhere in the app. The icon shows the mode you
-                    // will switch TO, which is the convention for a toggle
-                    // that has no separate label.
-                    Button {
-                        renderMode = (renderMode == .rendered) ? .source : .rendered
-                    } label: {
-                        Image(systemName: renderMode == .rendered
-                              ? "chevron.left.forwardslash.chevron.right"
-                              : "doc.richtext")
-                    }
-                    .accessibilityLabel(renderMode == .rendered
-                                        ? Text("Show Source")
-                                        : Text("Show Rendered"))
+            ToolbarItem(placement: .topBarLeading) {
+                if case .loaded = loadState {
+                        // Single toggle button, NOT a segmented Picker.
+                        //
+                        // A `.segmented` Picker asks for the width of all its
+                        // segments, but a toolbar item on iOS 26's Liquid Glass
+                        // bar is laid out as one round glass button. The control
+                        // got squeezed into that circular slot and drew both
+                        // segments on top of each other — the reported "two
+                        // overlapping, distorted icons" (screenshot
+                        // /tmp/md_preview_toggle_bug.jpg), not an animation stuck
+                        // mid-transition.
+                        //
+                        // A plain Button showing ONE icon is what a toolbar slot
+                        // is shaped for, and it matches the icon-swap toggles
+                        // used elsewhere in the app. The icon shows the mode you
+                        // will switch TO, which is the convention for a toggle
+                        // that has no separate label.
+                        Button {
+                            renderMode = (renderMode == .rendered) ? .source : .rendered
+                        } label: {
+                            Image(systemName: renderMode == .rendered
+                                  ? "chevron.left.forwardslash.chevron.right"
+                                  : "doc.richtext")
+                        }
+                        .accessibilityLabel(renderMode == .rendered
+                                            ? Text("Show Source")
+                                            : Text("Show Rendered"))
                 }
             }
         }

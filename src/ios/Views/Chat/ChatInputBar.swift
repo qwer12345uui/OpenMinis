@@ -70,86 +70,57 @@ struct SwipeToSendHint: View {
 
 // MARK: - Flow Layout
 
-/// A custom Layout that arranges subviews in a wrapping horizontal flow.
-private struct FlowLayout: Layout {
+/// Wrapping tile layout that also works on iOS 15.
+///
+/// SwiftUI's `Layout` protocol (and `ProposedViewSize`) is iOS 16-only, so this
+/// is built from plain stacks: items are chunked into rows from a measured
+/// container width. Every call site lays out fixed-size square tiles.
+private struct FlowLayout<Item: Identifiable, ItemContent: View>: View {
+    let items: [Item]
+    var tile: CGFloat = 64
     var hSpacing: CGFloat = 8
     var vSpacing: CGFloat = 8
     var alignment: HorizontalAlignment = .leading
+    @ViewBuilder var content: (Item) -> ItemContent
 
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let result = arrange(proposal: proposal, subviews: subviews)
-        // Use the full proposed width so the layout fills its container.
-        return CGSize(width: proposal.width ?? result.size.width, height: result.size.height)
+    @State private var containerWidth: CGFloat = 0
+
+    private var itemsPerRow: Int {
+        let usable = max(containerWidth, tile)
+        return max(1, Int(floor((usable + hSpacing) / (tile + hSpacing))))
     }
 
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let result = arrange(proposal: proposal, subviews: subviews)
-        let containerWidth = bounds.width
-        for (index, position) in result.positions.enumerated() {
-            let xOffset: CGFloat
-            if alignment == .trailing {
-                let rowWidth = result.rowWidths[result.rowIndices[index]]
-                xOffset = containerWidth - rowWidth + position.x
-            } else {
-                xOffset = position.x
+    private var rows: [[Item]] {
+        guard !items.isEmpty else { return [] }
+        let perRow = itemsPerRow
+        return stride(from: 0, to: items.count, by: perRow).map { start in
+            Array(items[start..<min(start + perRow, items.count)])
+        }
+    }
+
+    private var isTrailing: Bool { alignment == .trailing }
+
+    var body: some View {
+        VStack(alignment: alignment, spacing: vSpacing) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                HStack(spacing: hSpacing) {
+                    if isTrailing { Spacer(minLength: 0) }
+                    ForEach(row) { item in
+                        content(item)
+                    }
+                    if !isTrailing { Spacer(minLength: 0) }
+                }
             }
-            subviews[index].place(
-                at: CGPoint(x: bounds.minX + xOffset, y: bounds.minY + position.y),
-                proposal: ProposedViewSize(result.sizes[index])
-            )
         }
-    }
-
-    private struct ArrangeResult {
-        var positions: [CGPoint]
-        var sizes: [CGSize]
-        var size: CGSize
-        var rowWidths: [CGFloat]
-        var rowIndices: [Int]
-    }
-
-    private func arrange(proposal: ProposedViewSize, subviews: Subviews) -> ArrangeResult {
-        let maxWidth = proposal.width ?? .infinity
-        var positions: [CGPoint] = []
-        var sizes: [CGSize] = []
-        var rowIndices: [Int] = []
-        var rowWidths: [CGFloat] = []
-        var x: CGFloat = 0
-        var y: CGFloat = 0
-        var rowHeight: CGFloat = 0
-        var totalWidth: CGFloat = 0
-        var currentRowStart = 0
-        var currentRow = 0
-
-        for (i, subview) in subviews.enumerated() {
-            let size = subview.sizeThatFits(.unspecified)
-            if x + size.width > maxWidth, x > 0 {
-                // Finish current row
-                rowWidths.append(x - hSpacing)
-                currentRow += 1
-                x = 0
-                y += rowHeight + vSpacing
-                rowHeight = 0
-                currentRowStart = i
+        .frame(maxWidth: .infinity, alignment: isTrailing ? .trailing : .leading)
+        .background(
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { containerWidth = geo.size.width }
+                    .onChange(of: geo.size.width) { width in
+                        containerWidth = width
+                    }
             }
-            positions.append(CGPoint(x: x, y: y))
-            sizes.append(size)
-            rowIndices.append(currentRow)
-            rowHeight = max(rowHeight, size.height)
-            x += size.width + hSpacing
-            totalWidth = max(totalWidth, x - hSpacing)
-        }
-        // Last row
-        if !subviews.isEmpty {
-            rowWidths.append(x - hSpacing)
-        }
-
-        return ArrangeResult(
-            positions: positions,
-            sizes: sizes,
-            size: CGSize(width: totalWidth, height: y + rowHeight),
-            rowWidths: rowWidths,
-            rowIndices: rowIndices
         )
     }
 }
@@ -174,9 +145,27 @@ struct InputAttachmentGridView: View {
 
     @State private var draggingID: UUID?
 
+    private enum GridItem: Identifiable {
+        case attachment(InputAttachment)
+        case loadingVideo(Int)
+
+        var id: String {
+            switch self {
+            case .attachment(let attachment): return attachment.id.uuidString
+            case .loadingVideo(let index): return "loading-video-\(index)"
+            }
+        }
+    }
+
+    private var gridItems: [GridItem] {
+        attachments.map { .attachment($0) }
+            + (0..<max(0, loadingVideoCount)).map { .loadingVideo($0) }
+    }
+
     var body: some View {
-        FlowLayout(hSpacing: 8, vSpacing: 8) {
-            ForEach(attachments) { attachment in
+        FlowLayout(items: gridItems, tile: 64, hSpacing: 8, vSpacing: 8) { item in
+            switch item {
+            case .attachment(let attachment):
                 AttachmentChip(attachment: attachment) {
                     onRemove(attachment)
                 }
@@ -190,8 +179,7 @@ struct InputAttachmentGridView: View {
                     draggingID: $draggingID,
                     onMove: onMove
                 ))
-            }
-            ForEach(0..<loadingVideoCount, id: \.self) { _ in
+            case .loadingVideo:
                 VideoLoadingChip()
             }
         }
@@ -737,8 +725,10 @@ struct UserAttachmentList: View {
     }
 
     var body: some View {
-        FlowLayout(hSpacing: UserAttachmentTileMetrics.gap, vSpacing: UserAttachmentTileMetrics.gap, alignment: .trailing) {
-            ForEach(attachments) { meta in
+        FlowLayout(items: attachments, tile: tileSize,
+                   hSpacing: UserAttachmentTileMetrics.gap,
+                   vSpacing: UserAttachmentTileMetrics.gap,
+                   alignment: .trailing) { meta in
                 if meta.isImage {
                     AsyncImageTile(meta: meta, tileSize: tileSize) {
                         openGallery(startingAt: meta)
@@ -750,7 +740,6 @@ struct UserAttachmentList: View {
                 } else {
                     fileTile(meta)
                 }
-            }
         }
     }
 
@@ -917,17 +906,18 @@ struct QueuedAttachmentPreview: View {
     private let tileSize: CGFloat = UserAttachmentTileMetrics.tile
 
     var body: some View {
-        FlowLayout(hSpacing: UserAttachmentTileMetrics.gap, vSpacing: UserAttachmentTileMetrics.gap, alignment: .trailing) {
-            ForEach(attachments) { attachment in
-                switch attachment.kind {
-                case .image:
-                    AsyncCacheURLImageTile(cacheURL: attachment.cacheURL, tileSize: tileSize)
-                        .opacity(0.7)
-                case .video:
-                    placeholderTile(icon: "film", fileName: attachment.fileName)
-                case .document:
-                    placeholderTile(icon: "doc.fill", fileName: attachment.fileName)
-                }
+        FlowLayout(items: attachments, tile: tileSize,
+                   hSpacing: UserAttachmentTileMetrics.gap,
+                   vSpacing: UserAttachmentTileMetrics.gap,
+                   alignment: .trailing) { attachment in
+            switch attachment.kind {
+            case .image:
+                AsyncCacheURLImageTile(cacheURL: attachment.cacheURL, tileSize: tileSize)
+                    .opacity(0.7)
+            case .video:
+                placeholderTile(icon: "film", fileName: attachment.fileName)
+            case .document:
+                placeholderTile(icon: "doc.fill", fileName: attachment.fileName)
             }
         }
     }
@@ -1649,6 +1639,7 @@ struct PastableTextView: UIViewRepresentable {
         return tv
     }
 
+    @available(iOS 16.0, *)
     func sizeThatFits(_ proposal: ProposedViewSize, uiView tv: PastableUITextView, context: Context) -> CGSize? {
         let width = proposal.width ?? UIScreen.main.bounds.width
         // [T-share-url-input-height] UITextView.sizeThatFits returns the

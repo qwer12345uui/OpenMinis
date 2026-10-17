@@ -96,11 +96,11 @@ struct ISHTerminalView: View {
         .navigationTitle("Minis Shell")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if showCloseButton {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button { dismiss() } label: {
-                        Image(systemName: "xmark")
-                    }
+            ToolbarItem(placement: .navigationBarLeading) {
+                if showCloseButton {
+                        Button { dismiss() } label: {
+                            Image(systemName: "xmark")
+                        }
                 }
             }
             ToolbarItem(placement: .navigationBarTrailing) {

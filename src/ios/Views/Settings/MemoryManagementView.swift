@@ -60,18 +60,18 @@ struct MemoryManagementView: View {
         .navigationTitle("Memory")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if #available(iOS 17.0, *), iCloudSyncEnabled {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button {
-                            Task { await forceSyncMemory() }
+            ToolbarItem(placement: .topBarTrailing) {
+                if #available(iOS 17.0, *), iCloudSyncEnabled {
+                        Menu {
+                            Button {
+                                Task { await forceSyncMemory() }
+                            } label: {
+                                Label(AppLocalized("Force iCloud Sync"),
+                                      systemImage: "arrow.triangle.2.circlepath.icloud")
+                            }
                         } label: {
-                            Label(AppLocalized("Force iCloud Sync"),
-                                  systemImage: "arrow.triangle.2.circlepath.icloud")
+                            Image(systemName: "ellipsis.circle")
                         }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                    }
                 }
             }
         }

@@ -296,10 +296,16 @@ final class EnvVarStore: ObservableObject {
     // MARK: - Validation
 
     /// Valid env var name: starts with a letter, contains only letters, digits, and underscores.
-    static let keyRegex = /^[A-Za-z][A-Za-z0-9_]*$/
+    /// Uses NSRegularExpression rather than a Regex literal because `Regex`
+    /// (and `wholeMatch(of:)`) require iOS 16.
+    private static let keyRegex: NSRegularExpression? = {
+        try? NSRegularExpression(pattern: "^[A-Za-z][A-Za-z0-9_]*$")
+    }()
 
     static func isValidKey(_ key: String) -> Bool {
-        key.wholeMatch(of: keyRegex) != nil
+        guard let keyRegex else { return false }
+        let range = NSRange(key.startIndex..<key.endIndex, in: key)
+        return keyRegex.firstMatch(in: key, options: [], range: range) != nil
     }
 
     // MARK: - Value Sanitization
