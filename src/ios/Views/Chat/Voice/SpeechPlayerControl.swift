@@ -159,7 +159,7 @@ struct SpeechPlayerControl: View {
     private func scheduleRecompute() {
         recomputeTask?.cancel()
         recomputeTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 250000000))
+            try? await Task.sleep(nanoseconds: 250000000)
             guard !Task.isCancelled else { return }
             recompute()
         }
@@ -421,7 +421,7 @@ struct SpeechPlayerControl: View {
     private func scheduleReclamp() {
         reclampTask?.cancel()
         reclampTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 150000000))
+            try? await Task.sleep(nanoseconds: 150000000)
             guard !Task.isCancelled, !isDragging else { return }
             let clamped = clampedOffset(dragOffset)
             if abs(clamped.width - dragOffset.width) > 0.5 || abs(clamped.height - dragOffset.height) > 0.5 {
