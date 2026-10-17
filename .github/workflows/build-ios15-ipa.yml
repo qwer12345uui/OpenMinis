@@ -108,13 +108,17 @@ jobs:
       - name: Build Minis.app (unsigned)
         run: |
           set -uo pipefail
-          DEPLOY_ARG=""
+          # NOTE: never override IPHONEOS_DEPLOYMENT_TARGET on the command
+          # line — that applies to EVERY target, and it drags the extensions
+          # (MinisFileProvider needs 16.0, AgentWidget needs 16.2) down to 15.0,
+          # which produces ~24 ": is only available in iOS 16.0 or newer"
+          # errors from FileProvider code that cannot compile at 15.0.
+          # The Minis app target already carries 15.0 in the project, so the
+          # project's per-target settings are the single source of truth.
           if [ -n "${DEV_TARGET}" ]; then
-            DEPLOY_ARG="IPHONEOS_DEPLOYMENT_TARGET=${DEV_TARGET}"
-            echo "Forcing IPHONEOS_DEPLOYMENT_TARGET=${DEV_TARGET}"
-          else
-            echo "Using the deployment target configured in the project."
+            echo "NOTE: ignoring deployment_target input '${DEV_TARGET}' (per-target settings in the project are used)"
           fi
+          DEPLOY_ARG=""
 
           set +e
           # NOTE: ${DEPLOY_ARG} stays unquoted on purpose — an empty value must
@@ -152,6 +156,12 @@ jobs:
           set -uo pipefail
           APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' | head -n 1)
           test -n "$APP"
+          MAIN_MIN=$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$APP/Info.plist" 2>/dev/null || echo "unknown")
+          echo "main app MinimumOSVersion: $MAIN_MIN"
+          if [ "$MAIN_MIN" != "15.0" ]; then
+            echo "BUILD_TARGET_FAIL: expected the app to target iOS 15.0, got '$MAIN_MIN'"
+            exit 1
+          fi
           shopt -s nullglob 2>/dev/null || true
           for appex in "$APP"/PlugIns/*.appex; do
             [ -d "$appex" ] || continue
