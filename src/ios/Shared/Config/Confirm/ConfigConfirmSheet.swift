@@ -69,7 +69,7 @@ struct ConfigConfirmSheet: View {
                         confirmSheetLogger.info("tap primary pending=\(change.id) items=\(workingItems.count) approved=\(approvedCount)")
                         gate.userApprove(items: workingItems)
                     }
-                    .bold()
+                    .font(.body.weight(.bold))
                     .disabled(workingItems.isEmpty)
                 }
             }

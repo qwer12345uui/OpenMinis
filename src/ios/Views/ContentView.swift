@@ -812,7 +812,7 @@ private struct FolderPickerSheet: View {
                         Spacer()
                         Button("Create", action: createIfNamed)
                             .buttonStyle(.borderless)
-                            .fontWeight(.semibold)
+                            .font(.body.weight(.semibold))
                             .disabled(trimmedName.isEmpty || duplicateFolder != nil)
                     }
                     // [T-folder-duplicate-name] Name already taken. Says so, and
@@ -1125,8 +1125,8 @@ struct MacOS27OpaqueNavigationBar<S: ShapeStyle>: ViewModifier {
         if #available(iOS 26.0, *), MacOS27GlassWorkaround.isActive {
             content
                 .scrollEdgeEffectHidden(true, for: .top)
-                .toolbarBackground(background, for: .navigationBar)
-                .toolbarBackground(.visible, for: .navigationBar)
+                .toolbarBackground(background, for: Minis.ToolbarPlacement.navigationBar)
+                .toolbarBackground(.visible, for: Minis.ToolbarPlacement.navigationBar)
         } else {
             content
         }
@@ -2220,8 +2220,10 @@ struct ContentView: View {
             }
             // iPad: detail cleared (newValue == nil) — if a quick-action
             // workflow is ensuring-home, advance it now.
-            if newValue == nil, case .ensuringHome = QuickActionWorkflow.shared.state {
-                QuickActionWorkflow.shared.markHome()
+            if newValue == nil {
+                if case .ensuringHome = QuickActionWorkflow.shared.state {
+                    QuickActionWorkflow.shared.markHome()
+                }
             }
             // [T-ios-search-focus-sticky] iPad split: selecting a session (or
             // new chat) with an empty search drops the sticky search bar.
@@ -7587,7 +7589,7 @@ struct SessionEditSheet: View {
                         guard !title.isEmpty else { return }
                         onSave(title, editCategory.isEmpty ? nil : editCategory)
                     }
-                    .bold()
+                    .font(.body.weight(.bold))
                     .disabled(editTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }

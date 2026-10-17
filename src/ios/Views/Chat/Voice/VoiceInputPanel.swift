@@ -1340,7 +1340,7 @@ enum VoiceLanguages {
         // Prefer the full localized locale name (e.g. "中文（中国）"); fall back to
         // the bare language name, then the raw code.
         let name = current.localizedString(forIdentifier: code)
-            ?? loc.backportLanguageCode.map { current.localizedString(forLanguageCode: $0.identifier) ?? $0.identifier }
+            ?? loc.backportLanguageCode.map { current.localizedString(forLanguageCode: $0) ?? $0 }
             ?? code
         let primary = loc.backportLanguageCode ?? String(code.prefix(2))
         let short = primary == "zh" ? "中"

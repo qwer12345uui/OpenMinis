@@ -116,7 +116,7 @@ final class SpeechRecognitionManager: ObservableObject {
             resolvedLocale = Locale(identifier: savedId)
         } else {
             let systemLangCode = Locale.current.backportLanguageCode ?? "en"
-            resolvedLocale = allSupported.first { $0.language.languageCode?.identifier == systemLangCode }
+            resolvedLocale = allSupported.first { $0.backportLanguageCode == systemLangCode }
                 ?? Locale(identifier: "en-US")
         }
 

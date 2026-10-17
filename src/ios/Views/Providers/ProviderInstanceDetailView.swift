@@ -82,16 +82,21 @@ struct ProviderInstanceDetailView: View {
                 // [T-copilot-provider] Device-code sheet, same post-sign-in
                 // model reconcile as Kimi — the catalog is empty until the
                 // server has been asked, so this refresh is what populates it.
-                CopilotDeviceLoginSheet(instanceId: instance.id) { success in
-                    oauthRefreshTrigger.toggle()
-                    if success, instance.providerType.oauthSupportsModelDiscovery {
-                        Task { await store.refreshModels(for: instance) }
+                if #available(iOS 16.0, *) {
+                    CopilotDeviceLoginSheet(instanceId: instance.id) { success in
+                        oauthRefreshTrigger.toggle()
+                        if success, instance.providerType.oauthSupportsModelDiscovery {
+                            Task { await store.refreshModels(for: instance) }
+                        }
                     }
+                } else {
+                    IOS16FeatureUnavailableView("GitHub Copilot sign-in")
                 }
             }
         }
         .sheet(isPresented: $showKimiLogin) {
             if let instance = instance {
+                if #available(iOS 16.0, *) {
                 KimiDeviceLoginSheet(instanceId: instance.id) { success in
                     oauthRefreshTrigger.toggle()
                     // [T-provider-oauth-model-discovery] Kimi Code signs in
@@ -103,6 +108,9 @@ struct ProviderInstanceDetailView: View {
                     if success, instance.providerType.oauthSupportsModelDiscovery {
                         Task { await store.refreshModels(for: instance) }
                     }
+                }
+                } else {
+                    IOS16FeatureUnavailableView("Kimi Code sign-in")
                 }
             }
         }

@@ -535,7 +535,7 @@ private struct SoulIconEditing: ViewModifier {
                     icon = chosen
                 }
             }
-            .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem,
+            .backportPhotosPicker(isPresented: $showPhotoPicker, selection: $photoItem,
                           matching: .images, photoLibrary: .shared())
             // Single-parameter form: the two-parameter `onChange` is iOS 17+,
             // and this target still deploys lower.

@@ -1,14 +1,14 @@
 import SwiftUI
 import UIKit
 
-// MARK: - UIHostingConfiguration (iOS 16 backport)
+// MARK: - BackportHostingConfiguration (iOS 16 backport)
 //
-// Backport of SwiftUI's `UIHostingConfiguration` (iOS 16+) built on the
+// Backport of SwiftUI's `BackportHostingConfiguration` (iOS 16+) built on the
 // `UIContentConfiguration` / `UIContentView` protocols, which exist since
 // iOS 14. Covers the surface this app uses: the content/background builders,
 // `.margins(_:_)` and `.minSize(width:height:)`.
 
-public struct UIHostingConfiguration<Content: View, Background: View>: UIContentConfiguration {
+public struct BackportHostingConfiguration<Content: View, Background: View>: UIContentConfiguration {
     var content: Content
     var background: Background
     var margins: UIEdgeInsets
@@ -17,7 +17,7 @@ public struct UIHostingConfiguration<Content: View, Background: View>: UIContent
     public init(@ViewBuilder content: () -> Content) where Background == EmptyView {
         self.content = content()
         self.background = EmptyView()
-        // Real UIHostingConfiguration defaults: 11pt vertical, 16pt horizontal.
+        // Real BackportHostingConfiguration defaults: 11pt vertical, 16pt horizontal.
         self.margins = UIEdgeInsets(top: 11, left: 16, bottom: 11, right: 16)
         self.minSize = nil
     }
@@ -25,13 +25,13 @@ public struct UIHostingConfiguration<Content: View, Background: View>: UIContent
     public init(@ViewBuilder content: () -> Content, @ViewBuilder background: () -> Background) {
         self.content = content()
         self.background = background()
-        // Real UIHostingConfiguration defaults: 11pt vertical, 16pt horizontal.
+        // Real BackportHostingConfiguration defaults: 11pt vertical, 16pt horizontal.
         self.margins = UIEdgeInsets(top: 11, left: 16, bottom: 11, right: 16)
         self.minSize = nil
     }
 
     /// Backport of `.margins(_:_:)`.
-    public func margins(_ edges: Edge.Set = .all, _ length: CGFloat) -> UIHostingConfiguration<Content, Background> {
+    public func margins(_ edges: Edge.Set = .all, _ length: CGFloat) -> BackportHostingConfiguration<Content, Background> {
         var copy = self
         var m = copy.margins
         if edges.contains(.top) || edges == .all { m.top = length }
@@ -43,15 +43,15 @@ public struct UIHostingConfiguration<Content: View, Background: View>: UIContent
     }
 
     /// Backport of `.minSize(width:height:)` (iOS 17+).
-    public func minSize(width: CGFloat? = nil, height: CGFloat? = nil) -> UIHostingConfiguration<Content, Background> {
+    public func minSize(width: CGFloat? = nil, height: CGFloat? = nil) -> BackportHostingConfiguration<Content, Background> {
         var copy = self
         copy.minSize = CGSize(width: width ?? 0, height: height ?? 0)
         return copy
     }
 
     /// Backport of `.background(_:)` with a ViewBuilder background.
-    public func background<B: View>(@ViewBuilder _ background: () -> B) -> UIHostingConfiguration<Content, B> {
-        UIHostingConfiguration<Content, B>(
+    public func background<B: View>(@ViewBuilder _ background: () -> B) -> BackportHostingConfiguration<Content, B> {
+        BackportHostingConfiguration<Content, B>(
             content: { self.content },
             background: background
         )
@@ -61,7 +61,7 @@ public struct UIHostingConfiguration<Content: View, Background: View>: UIContent
         BackportHostingContentView(content: content, background: background, margins: margins, minSize: minSize)
     }
 
-    public func updated(for state: UIConfigurationState) -> UIHostingConfiguration<Content, Background> {
+    public func updated(for state: UIConfigurationState) -> BackportHostingConfiguration<Content, Background> {
         self
     }
 }
@@ -76,7 +76,7 @@ final class BackportHostingContentView<Content: View, Background: View>: UIView,
         didSet { applyConfiguration() }
     }
 
-    private var current: UIHostingConfiguration<Content, Background>?
+    private var current: BackportHostingConfiguration<Content, Background>?
     private var contentController: UIHostingController<Content>?
     private var backgroundController: UIHostingController<Background>?
     private var constraintsInstalled = false
@@ -84,8 +84,8 @@ final class BackportHostingContentView<Content: View, Background: View>: UIView,
     private var minimumSize: CGSize?
 
     init(content: Content, background: Background, margins: UIEdgeInsets, minSize: CGSize?) {
-        self.configuration = UIHostingConfiguration(content: { content }, background: { background })
-        self.current = UIHostingConfiguration(content: { content }, background: { background })
+        self.configuration = BackportHostingConfiguration(content: { content }, background: { background })
+        self.current = BackportHostingConfiguration(content: { content }, background: { background })
         self.contentMargins = margins
         self.minimumSize = minSize
         super.init(frame: .zero)
@@ -99,7 +99,7 @@ final class BackportHostingContentView<Content: View, Background: View>: UIView,
     }
 
     private func applyConfiguration() {
-        guard let config = configuration as? UIHostingConfiguration<Content, Background> else { return }
+        guard let config = configuration as? BackportHostingConfiguration<Content, Background> else { return }
         contentMargins = config.margins
         minimumSize = config.minSize
 

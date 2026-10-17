@@ -344,23 +344,31 @@ struct AddProviderView: View {
         .sheet(isPresented: $showKimiLogin) {
             // [T-kimi-oauth] RFC 8628 device-code login. On success, mark the
             // OAuth step done + surface the masked token, matching startOAuth().
-            KimiDeviceLoginSheet(instanceId: pendingInstanceId) { success in
-                if success {
-                    oauthAuthTime = Date()
-                    oauthMaskedToken = loadMaskedToken(type: .kimiCode)
-                    pendingOAuthDone = true
+            if #available(iOS 16.0, *) {
+                KimiDeviceLoginSheet(instanceId: pendingInstanceId) { success in
+                    if success {
+                        oauthAuthTime = Date()
+                        oauthMaskedToken = loadMaskedToken(type: .kimiCode)
+                        pendingOAuthDone = true
+                    }
                 }
+            } else {
+                IOS16FeatureUnavailableView("Kimi Code sign-in")
             }
         }
         .sheet(isPresented: $showCopilotLogin) {
             // [T-copilot-provider] Device-code login, gated behind the risk
             // notice inside the sheet.
-            CopilotDeviceLoginSheet(instanceId: pendingInstanceId) { success in
-                if success {
-                    oauthAuthTime = Date()
-                    oauthMaskedToken = loadMaskedToken(type: .githubCopilot)
-                    pendingOAuthDone = true
+            if #available(iOS 16.0, *) {
+                CopilotDeviceLoginSheet(instanceId: pendingInstanceId) { success in
+                    if success {
+                        oauthAuthTime = Date()
+                        oauthMaskedToken = loadMaskedToken(type: .githubCopilot)
+                        pendingOAuthDone = true
+                    }
                 }
+            } else {
+                IOS16FeatureUnavailableView("GitHub Copilot sign-in")
             }
         }
         .fileImporter(isPresented: $showImportFile, allowedContentTypes: [.json]) { result in

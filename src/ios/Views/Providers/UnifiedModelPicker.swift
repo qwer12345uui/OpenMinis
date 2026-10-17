@@ -794,22 +794,24 @@ struct UnifiedModelPicker: View {
 
     // MARK: - Toolbar
 
+    // `ToolbarContentBuilder.buildEither` is iOS 16-only, so the branch lives
+    // inside each ToolbarItem's ViewBuilder instead of around the items.
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        if isMulti {
-            ToolbarItem(placement: .topBarLeading) {
+        ToolbarItem(placement: .topBarLeading) {
+            if isMulti {
                 Button("Cancel") { dismiss() }
             }
-            ToolbarItem(placement: .topBarTrailing) {
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            if isMulti {
                 Button("Add (\(selectedEntryIds.count))") {
                     config.onAddMulti?(selectedEntryIds)
                     dismiss()
                 }
                 .font(.body.weight(.semibold))
                 .disabled(selectedEntryIds.isEmpty)
-            }
-        } else {
-            ToolbarItem(placement: .topBarTrailing) {
+            } else {
                 Button("Done") { dismiss() }
             }
         }

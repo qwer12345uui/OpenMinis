@@ -578,7 +578,7 @@ struct MinisApp: App {
                 debugServer.restartIfDead(port: 8321)
                 #endif
 
-                try? await UNUserNotificationCenter.current().setBadgeCount(0)
+                BackportBadge.set(0)
                 BackgroundInterruptionTracker.shared.checkOnForeground()
                 // [T-shortcuts-diag-and-pending] Scan for AppIntent runs that
                 // were marked pending but never cleared (i.e. the process was
@@ -735,10 +735,12 @@ struct MinisApp: App {
 
     // MARK: - FileProvider
 
+    #if !MINIS_IOS15
     private static let fileProviderDomain = NSFileProviderDomain(
         identifier: NSFileProviderDomainIdentifier("com.openminis.app.files"),
         displayName: "Minis"
     )
+    #endif
 
     /// Bumped when we need to force-rebuild the FileProvider domain on next launch
     /// (e.g. after a bug where iOS Files ended up paused and only a full
@@ -799,6 +801,9 @@ struct MinisApp: App {
     }
 
     private static func registerFileProviderDomain() {
+        #if MINIS_IOS15
+        lifecycleLog.info("[FileProvider] skipped on the iOS 15 build (domain APIs are iOS 16+)")
+        #else
         logAppUpdateMarkerForFPTrace()
 
         // [T-ios-fp-mac-bootcrash] Circuit breaker, NOT a blanket disable.
@@ -1004,14 +1009,19 @@ struct MinisApp: App {
                 }
             }
         }
+        #endif
     }
 
     private static func signalFileProvider() {
+        #if MINIS_IOS15
+        lifecycleLog.info("[FileProvider] signal skipped on the iOS 15 build (domain APIs are iOS 16+)")
+        #else
         NSFileProviderManager(for: fileProviderDomain)?.signalEnumerator(for: .rootContainer) { error in
             if let error {
                 lifecycleLog.warning("[FileProvider] signal failed: \(error.localizedDescription)")
             }
         }
+        #endif
     }
 
     /// Snapshot providerRoot's three user-data subdirs (`memory`, `skills`,

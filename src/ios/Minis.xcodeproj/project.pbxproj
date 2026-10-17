@@ -10,6 +10,8 @@
 	E5B100000000000000000001 /* BackportNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5B000000000000000000001; };
 	E5B100000000000000000002 /* BackportSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5B000000000000000000002; };
 	E5B100000000000000000003 /* BackportMisc.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5B000000000000000000003; };
+	E5B100000000000000000099 /* BackportPlatform.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5B000000000000000000099; };
+	E5B100000000000000000098 /* IOS15Stubs.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5B000000000000000000098; };
 	E5B100000000000000000004 /* BackportHosting.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5B000000000000000000004; };
 	E5B100000000000000000005 /* BackportPhotos.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5B000000000000000000005; };
 		21FED4B7BB6F6D9476C9992E /* VoiceProvider+System.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88993FC8E3F0199C6638F664 /* VoiceProvider+System.swift */; };
@@ -644,6 +646,8 @@
 	E5B000000000000000000001 /* BackportNavigation.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = BackportNavigation.swift; sourceTree = "<group>"; };
 	E5B000000000000000000002 /* BackportSheets.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = BackportSheets.swift; sourceTree = "<group>"; };
 	E5B000000000000000000003 /* BackportMisc.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = BackportMisc.swift; sourceTree = "<group>"; };
+	E5B000000000000000000099 /* BackportPlatform.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = BackportPlatform.swift; sourceTree = "<group>"; };
+	E5B000000000000000000098 /* IOS15Stubs.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = IOS15Stubs.swift; sourceTree = "<group>"; };
 	E5B000000000000000000004 /* BackportHosting.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = BackportHosting.swift; sourceTree = "<group>"; };
 	E5B000000000000000000005 /* BackportPhotos.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = BackportPhotos.swift; sourceTree = "<group>"; };
 		0ED149397BEA7E0408C92688 /* GroupVoiceModelsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GroupVoiceModelsView.swift; sourceTree = "<group>"; };
@@ -2438,6 +2442,8 @@
 			E5B000000000000000000001 /* BackportNavigation.swift */,
 			E5B000000000000000000002 /* BackportSheets.swift */,
 			E5B000000000000000000003 /* BackportMisc.swift */,
+			E5B000000000000000000099 /* BackportPlatform.swift */,
+			E5B000000000000000000098 /* IOS15Stubs.swift */,
 			E5B000000000000000000004 /* BackportHosting.swift */,
 			E5B000000000000000000005 /* BackportPhotos.swift */,
 		);
@@ -2812,6 +2818,8 @@
 			E5B100000000000000000001 /* BackportNavigation.swift in Sources */,
 			E5B100000000000000000002 /* BackportSheets.swift in Sources */,
 			E5B100000000000000000003 /* BackportMisc.swift in Sources */,
+			E5B100000000000000000099 /* BackportPlatform.swift in Sources */,
+			E5B100000000000000000098 /* IOS15Stubs.swift in Sources */,
 			E5B100000000000000000004 /* BackportHosting.swift in Sources */,
 			E5B100000000000000000005 /* BackportPhotos.swift in Sources */,
 				AC0000202 /* ProviderCustomizationGenerated.swift in Sources */,

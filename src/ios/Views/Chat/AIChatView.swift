@@ -1198,7 +1198,7 @@ struct AIChatView: View {
                 }
             )
         }
-        .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotoItems,
+        .backportPhotosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotoItems,
                       maxSelectionCount: 50, matching: .any(of: [.images, .videos]))
         .onChange(of: selectedPhotoItems) { items in
             guard !items.isEmpty else { return }
@@ -2911,7 +2911,7 @@ struct AIChatView: View {
                 // layout and trips a precondition on the iOS 18 async renderer
                 // (ViewGraphGeometryObservers.needsUpdate SIGTRAP). The action
                 // also fires with the initial value, covering the old onAppear.
-                .onGeometryChange(for: CGFloat.self) { proxy in
+                .backportOnGeometryChange(for: CGFloat.self) { proxy in
                     proxy.size.height
                 } action: { newH in
                     floatingBarHeight = newH
@@ -3875,7 +3875,7 @@ struct AIChatView: View {
                     // [T-ios-geometry-observer-crash] traced an async-renderer
                     // SIGTRAP to that scaffold, and this file already
                     // standardised on the observer for exactly that reason.
-                    .onGeometryChange(for: CGFloat.self) { proxy in
+                    .backportOnGeometryChange(for: CGFloat.self) { proxy in
                         proxy.size.width
                     } action: { w in
                         guard w > 0, abs(w - inputBottomRowWidth) > 0.5 else { return }
@@ -3936,7 +3936,7 @@ struct AIChatView: View {
             // floating-bar site). Fires with the initial value too, so the
             // old onAppear seeding AND its diagnostic log are preserved as
             // a single unified line.
-            .onGeometryChange(for: CGRect.self) { proxy in
+            .backportOnGeometryChange(for: CGRect.self) { proxy in
                 proxy.frame(in: .global)
             } action: { frame in
                 let newH = frame.size.height
@@ -5317,7 +5317,7 @@ struct NavBarStyleModifier: ViewModifier {
             // starting below the bar.
             content
                 .ignoresSafeArea(.container, edges: .top)
-                .toolbarBackgroundVisibility(.visible, for: .navigationBar)
+                .toolbarBackgroundVisibility(.visible, for: Minis.ToolbarPlacement.navigationBar)
                 // [T-macos27-liquid-glass-navbar] See MacOS27GlassWorkaround in
                 // ContentView. `toolbarBackgroundVisibility(.visible)` only
                 // declares "there should be a backdrop"; the material is still
@@ -5345,7 +5345,7 @@ struct NavBarStyleModifier: ViewModifier {
                         // before, and the action's initial fire covers the old
                         // onAppear seed.
                         Color.clear
-                            .onGeometryChange(for: CGFloat.self) { proxy in
+                            .backportOnGeometryChange(for: CGFloat.self) { proxy in
                                 proxy.safeAreaInsets.top
                             } action: { topSafeAreaInset = $0 }
                             .ignoresSafeArea()

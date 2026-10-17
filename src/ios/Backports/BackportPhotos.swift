@@ -127,10 +127,12 @@ public struct PhotosPickerItem: Hashable, Identifiable {
 public extension View {
     /// Backport of `.photosPicker(isPresented:selection:matching:)`
     /// (multi-selection form, iOS 16+).
-    func photosPicker(isPresented: Binding<Bool>,
+    func backportPhotosPicker(isPresented: Binding<Bool>,
                       selection: Binding<[PhotosPickerItem]>,
+                      maxSelectionCount: Int? = nil,
                       matching filter: PHPickerFilter? = nil,
-                      preferredItemEncoding: PhotosPickerItemEncoding? = nil) -> some View {
+                      preferredItemEncoding: PhotosPickerItemEncoding? = nil,
+                      photoLibrary: PHPhotoLibrary? = nil) -> some View {
         background(
             Color.clear.sheet(isPresented: isPresented) {
                 BackportPHPickerSheet(
@@ -145,10 +147,11 @@ public extension View {
 
     /// Backport of `.photosPicker(isPresented:selection:matching:)`
     /// (single-selection form, iOS 16+).
-    func photosPicker(isPresented: Binding<Bool>,
+    func backportPhotosPicker(isPresented: Binding<Bool>,
                       selection: Binding<PhotosPickerItem?>,
                       matching filter: PHPickerFilter? = nil,
-                      preferredItemEncoding: PhotosPickerItemEncoding? = nil) -> some View {
+                      preferredItemEncoding: PhotosPickerItemEncoding? = nil,
+                      photoLibrary: PHPhotoLibrary? = nil) -> some View {
         background(
             Color.clear.sheet(isPresented: isPresented) {
                 BackportPHPickerSheet(
