@@ -146,6 +146,69 @@ jobs:
           echo "xcodebuild exit status: $STATUS"
           exit $STATUS
 
+      - name: Prune extensions that require iOS 16+
+        if: success()
+        run: |
+          set -uo pipefail
+          APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' | head -n 1)
+          test -n "$APP"
+          shopt -s nullglob 2>/dev/null || true
+          for appex in "$APP"/PlugIns/*.appex; do
+            [ -d "$appex" ] || continue
+            MIN=$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$appex/Info.plist" 2>/dev/null || echo "0")
+            echo "extension $(basename "$appex"): MinimumOSVersion=$MIN"
+            NEEDS_NEWER=$(python3 -c "import sys;v=sys.argv[1];p=[int(x) for x in v.split('.')[:2] if x.isdigit()];print(1 if (p+[0,0])[:2] > [15,0] else 0)" "$MIN")
+            if [ "$NEEDS_NEWER" = "1" ]; then
+              echo "  -> requires newer iOS ($MIN), removing from this build"
+              rm -rf "$appex"
+            fi
+          done
+          echo "remaining extensions:"
+          ls -1 "$APP/PlugIns" 2>/dev/null || echo "  (none)"
+
+      - name: Verify iOS 15 runtime linkage
+        if: success()
+        run: |
+          set -uo pipefail
+          APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' | head -n 1)
+          test -n "$APP"
+          BIN="$APP/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Info.plist")"
+          echo "App: $APP"
+          echo "Binary: $BIN"
+          echo "Main MinimumOSVersion: $(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$APP/Info.plist" 2>/dev/null || echo unknown)"
+          python3 - "$BIN" <<'PY'
+          import subprocess, sys, re
+          binary = sys.argv[1]
+          out = subprocess.run(["xcrun", "otool", "-l", binary], capture_output=True, text=True).stdout
+          libs = {}
+          for block in out.split("Load command"):
+              m = re.search(r"cmd (LC_LOAD(?:_WEAK)?_DYLIB)", block)
+              if not m:
+                  continue
+              n = re.search(r"name (.+?) \(offset", block)
+              if not n:
+                  continue
+              libs[n.group(1).strip()] = m.group(1)
+          watch = ["AppIntents", "WeatherKit", "CoreTransferable", "ActivityKit", "AlarmKit"]
+          bad = []
+          print("iOS 16+ framework load commands:")
+          found = False
+          for lib, kind in sorted(libs.items()):
+              if any(w in lib for w in watch):
+                  found = True
+                  print("  %-20s %s" % (kind, lib))
+                  if kind == "LC_LOAD_DYLIB":
+                      bad.append(lib)
+          if not found:
+              print("  (none)")
+          if bad:
+              print("LINKAGE_FAIL: strongly linked iOS 16+ frameworks would abort on launch under iOS 15:")
+              for b in bad:
+                  print("  - " + b)
+              sys.exit(1)
+          print("LINKAGE_OK: no strong links to iOS 16+ frameworks")
+          PY
+
       - name: Package unsigned IPA
         id: package
         if: success()
