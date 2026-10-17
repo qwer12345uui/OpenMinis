@@ -490,10 +490,6 @@ struct ChatMessageRow: View {
                         Label("Compact Above", systemImage: "arrow.down.right.and.arrow.up.left")
                     }
                 }
-            } preview: {
-                // [T-ios-longpress-menu-preview-background] Opaque card so the
-                // long-press preview isn't transparent (see MessageContextMenuPreview).
-                MessageContextMenuPreview(text: message.content)
             })
         }
         .padding(.horizontal, 16)
@@ -681,11 +677,6 @@ struct ChatMessageRow: View {
                         }
                     }
                     .equatable()
-                } preview: {
-                    // [T-ios-longpress-menu-preview-background] Opaque card for
-                    // this Color.clear-attached contextMenu (see
-                    // MessageContextMenuPreview).
-                    MessageContextMenuPreview(text: fullReplyText)
                 })
         }
         .sheet(item: $detailBlock) { block in
