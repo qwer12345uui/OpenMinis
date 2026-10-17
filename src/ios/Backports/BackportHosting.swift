@@ -64,6 +64,12 @@ public struct BackportHostingConfiguration<Content: View, Background: View>: UIC
     public func updated(for state: UIConfigurationState) -> BackportHostingConfiguration<Content, Background> {
         self
     }
+
+    /// `UIContentConfiguration` refines `NSCopying`, so the conformance needs
+    /// this even though the type is a value type.
+    public func copy(with zone: NSZone? = nil) -> Any {
+        self
+    }
 }
 
 // MARK: - Content view
