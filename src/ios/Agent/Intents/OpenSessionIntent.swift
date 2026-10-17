@@ -1,3 +1,4 @@
+#if !MINIS_IOS15
 import AppIntents
 import Foundation
 
@@ -26,3 +27,4 @@ struct OpenSessionIntent: AppIntent {
 extension Notification.Name {
     static let openSessionFromIntent = Notification.Name("openSessionFromIntent")
 }
+#endif // !MINIS_IOS15

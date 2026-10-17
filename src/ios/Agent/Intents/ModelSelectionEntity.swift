@@ -1,3 +1,4 @@
+#if !MINIS_IOS15
 import AppIntents
 import Foundation
 
@@ -211,3 +212,4 @@ struct ModelSelectionEntityQuery: EntityQuery, EntityStringQuery {
         return nil
     }
 }
+#endif // !MINIS_IOS15

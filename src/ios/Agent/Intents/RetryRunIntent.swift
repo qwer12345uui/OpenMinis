@@ -1,3 +1,4 @@
+#if !MINIS_IOS15
 import AppIntents
 import Foundation
 
@@ -283,3 +284,4 @@ struct RetryRunIntent: AppIntent {
         }
     }
 }
+#endif // !MINIS_IOS15

@@ -358,9 +358,11 @@ struct MinisApp: App {
                     // Register notification delegate for shortcut task tap-to-open
                     ShortcutNotificationDelegate.shared.register()
                     // Register App Shortcuts with the system so Siri and Spotlight discover them
+                    #if !MINIS_IOS15
                     if #available(iOS 17.0, *) {
                         MinisShortcutsProvider.updateAppShortcutParameters()
                     }
+                    #endif
                     // Start logging if previously enabled
                     LoggingManager.shared.startIfEnabled()
                     // HangFix(2026-05-14) — always-on hang detector. Was

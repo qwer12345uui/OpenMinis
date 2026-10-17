@@ -179,6 +179,7 @@ static int weather_handler(int argc, char **argv,
     __block NSDictionary *weatherData = nil;
     __block NSError *weatherError = nil;
 
+#if !MINIS_IOS15
     [WeatherOffloadBridge fetchWeatherForLatitude:loc.coordinate.latitude
                                        longitude:loc.coordinate.longitude
                                       completion:^(NSDictionary *result, NSError *error) {
@@ -188,6 +189,17 @@ static int weather_handler(int argc, char **argv,
     }];
 
     dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, 30 * NSEC_PER_SEC));
+#else
+    // WeatherKit requires iOS 16+. On the iOS 15 build the bridge is compiled
+    // out entirely so the binary carries no hard link to WeatherKit.framework.
+    // Report the same NOT_AVAILABLE shape the caller already handles.
+    (void)sem;
+    (void)weatherData;
+    weatherError = [NSError errorWithDomain:TOOL_NAME
+                                       code:NOFF_ERR_NOT_AVAILABLE
+                                   userInfo:@{NSLocalizedDescriptionKey:
+                                                  @"apple-weather requires iOS 16 or newer (WeatherKit)."}];
+#endif
 
     if (weatherError || !weatherData) {
         NSDictionary *err = noff_json_error(TOOL_NAME, subcmd,

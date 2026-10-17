@@ -1,3 +1,4 @@
+#if !MINIS_IOS15
 import AppIntents
 import Foundation
 import UserNotifications
@@ -294,3 +295,4 @@ struct QuickTaskIntent: AppIntent {
         }
     }
 }
+#endif // !MINIS_IOS15

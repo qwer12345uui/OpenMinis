@@ -1,3 +1,4 @@
+#if !MINIS_IOS15
 import AppIntents
 import Foundation
 
@@ -51,3 +52,4 @@ struct AudioTogglePlaybackIntent: LiveActivityIntent {
         return .result()
     }
 }
+#endif // !MINIS_IOS15

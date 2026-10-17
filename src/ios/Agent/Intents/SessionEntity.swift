@@ -1,3 +1,4 @@
+#if !MINIS_IOS15
 import AppIntents
 import Foundation
 
@@ -45,3 +46,4 @@ struct SessionEntityQuery: EntityQuery {
         return sessions.prefix(100).map { SessionEntity(from: $0) }
     }
 }
+#endif // !MINIS_IOS15

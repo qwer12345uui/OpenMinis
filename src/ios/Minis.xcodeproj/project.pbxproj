@@ -3628,6 +3628,10 @@
 					"$(SRCROOT)/../../build/frameworks",
 					"$(SRCROOT)/../../deps/frameworks",
 				);
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"MINIS_IOS15=1",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = (
 					"$(SRCROOT)/../../deps/include",
@@ -3654,10 +3658,21 @@
 					"-lish_emu",
 					"-lish",
 					"-lfakefs",
+					"-weak_framework",
+					ActivityKit,
+					"-weak_framework",
+					AlarmKit,
+					"-weak_framework",
+					AppIntents,
+					"-weak_framework",
+					WeatherKit,
+					"-weak_framework",
+					CoreTransferable,
 				);
 				OTHER_SWIFT_FLAGS = "";
 				PRODUCT_BUNDLE_IDENTIFIER = com.openminis.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) MINIS_IOS15";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OBJC_BRIDGING_HEADER = "$(SRCROOT)/MinisApp-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
@@ -3682,6 +3697,10 @@
 					"$(SRCROOT)/../../build/frameworks",
 					"$(SRCROOT)/../../deps/frameworks",
 				);
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"MINIS_IOS15=1",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = (
 					"$(SRCROOT)/../../deps/include",
@@ -3708,10 +3727,21 @@
 					"-lish_emu",
 					"-lish",
 					"-lfakefs",
+					"-weak_framework",
+					ActivityKit,
+					"-weak_framework",
+					AlarmKit,
+					"-weak_framework",
+					AppIntents,
+					"-weak_framework",
+					WeatherKit,
+					"-weak_framework",
+					CoreTransferable,
 				);
 				OTHER_SWIFT_FLAGS = "";
 				PRODUCT_BUNDLE_IDENTIFIER = com.openminis.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) MINIS_IOS15";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OBJC_BRIDGING_HEADER = "$(SRCROOT)/MinisApp-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;

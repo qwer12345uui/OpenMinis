@@ -1,3 +1,4 @@
+#if !MINIS_IOS15
 import AppIntents
 import Foundation
 
@@ -93,3 +94,4 @@ struct AskMinisIntent: AppIntent {
         return .result(dialog: "On it — opening Minis.")
     }
 }
+#endif // !MINIS_IOS15

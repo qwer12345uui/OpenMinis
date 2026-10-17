@@ -1,3 +1,4 @@
+#if !MINIS_IOS15
 import AppIntents
 import Foundation
 
@@ -52,3 +53,4 @@ struct SendPromptResultQuery: EntityQuery {
         []
     }
 }
+#endif // !MINIS_IOS15

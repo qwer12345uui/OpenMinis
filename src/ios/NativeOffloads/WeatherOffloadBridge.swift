@@ -1,3 +1,4 @@
+#if !MINIS_IOS15
 //
 //  WeatherOffloadBridge.swift
 //  MinisApp
@@ -207,3 +208,4 @@ import CoreLocation
         }
     }
 }
+#endif // !MINIS_IOS15

@@ -1,3 +1,4 @@
+#if !MINIS_IOS15
 import AppIntents
 import Foundation
 import UniformTypeIdentifiers
@@ -553,3 +554,4 @@ enum SendPromptResponseParsing {
         return text.isEmpty ? "Task completed." : text
     }
 }
+#endif // !MINIS_IOS15

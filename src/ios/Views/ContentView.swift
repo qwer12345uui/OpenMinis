@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 private let shareLog = AppLogger(category: "Share")
 private let draftLog = AppLogger(category: "DraftSession")
@@ -3250,7 +3251,7 @@ struct ContentView: View {
             // with a hand-rolled gesture sequence — the
             // gesture layer is where system gestures are
             // beaten (see the WebView sheet-dismiss fix).
-            .draggable(session.id)
+            .onDrag { NSItemProvider(object: session.id as NSString) }
             .overlay {
                 if regeneratingTitleSessionId == session.id {
                     ZStack {
@@ -3452,7 +3453,7 @@ struct ContentView: View {
                                 // with a hand-rolled gesture sequence — the
                                 // gesture layer is where system gestures are
                                 // beaten (see the WebView sheet-dismiss fix).
-                                .draggable(session.id)
+                                .onDrag { NSItemProvider(object: session.id as NSString) }
                                 .overlay {
                                     if regeneratingTitleSessionId == session.id {
                                         ZStack {
@@ -5205,6 +5206,72 @@ struct ContentView: View {
         .buttonStyle(.plain)
     }
 
+    // MARK: - Session drag & drop (iOS 15 path)
+
+    /// iOS 15 has no `.draggable` / `.dropDestination` (both are iOS 16 and
+    /// pull `CoreTransferable.framework` into the binary's load commands,
+    /// which dyld refuses to launch on iOS 15). These two helpers re-create
+    /// the same behaviour on top of UIKit-backed `onDrag` / `onDrop` with a
+    /// plain `NSString` item provider, so the app links no iOS 16 framework.
+
+    private var bucketHeaderDropTarget: Binding<Bool> {
+        Binding(
+            get: { dropTargetFolderId == "" },
+            set: { over in
+                if over {
+                    dropTargetFolderId = ""
+                } else if dropTargetFolderId == "" {
+                    dropTargetFolderId = nil
+                }
+            }
+        )
+    }
+
+    private func folderDropTarget(_ fid: String?) -> Binding<Bool> {
+        Binding(
+            get: { fid != nil && dropTargetFolderId == fid },
+            set: { over in
+                if over {
+                    dropTargetFolderId = fid
+                } else if dropTargetFolderId == fid {
+                    dropTargetFolderId = nil
+                }
+            }
+        )
+    }
+
+    /// Loads the dragged session ids from the drop providers, then applies the
+    /// folder move. Returns `true` for "I accept this drop shape" so the
+    /// system keeps the drag alive while the async load runs.
+    private func handleSessionDrop(_ providers: [NSItemProvider], into folderId: String?) -> Bool {
+        guard !providers.isEmpty else { return false }
+        let group = DispatchGroup()
+        let lock = NSLock()
+        var ids: [String] = []
+        for provider in providers {
+            group.enter()
+            _ = provider.loadObject(ofClass: NSString.self) { object, _ in
+                if let value = object as? NSString {
+                    lock.lock()
+                    ids.append(value as String)
+                    lock.unlock()
+                }
+                group.leave()
+            }
+        }
+        group.notify(queue: .main) {
+            lock.lock()
+            let sessionIds = ids
+            lock.unlock()
+            guard !sessionIds.isEmpty else { return }
+            Task { @MainActor in
+                await ChatStore.shared.setFolder(folderId, forSessions: sessionIds)
+                refreshSessionList()
+            }
+        }
+        return true
+    }
+
     // MARK: - Section Header
 
     @ViewBuilder
@@ -5260,18 +5327,8 @@ struct ContentView: View {
             // Dropping on a date-bucket header moves the sessions OUT of any
             // folder — the drag gesture works both directions, otherwise
             // moving out would still require a trip through the menu.
-            .dropDestination(for: String.self) { sessionIds, _ in
-                Task { @MainActor in
-                    await ChatStore.shared.setFolder(nil, forSessions: sessionIds)
-                    refreshSessionList()
-                }
-                return true
-            } isTargeted: { over in
-                if over {
-                    dropTargetFolderId = ""
-                } else if dropTargetFolderId == "" {
-                    dropTargetFolderId = nil
-                }
+            .onDrop(of: [UTType.text], isTargeted: bucketHeaderDropTarget) { providers in
+                handleSessionDrop(providers, into: nil)
             }
         }
     }
@@ -5467,19 +5524,9 @@ struct ContentView: View {
         // ScrollViewReader anchor for the mini-bar's "back to header" jump.
         .id("folderHeader-\(group.folderId ?? "")")
         .listRowInsets(EdgeInsets())
-        .dropDestination(for: String.self) { sessionIds, _ in
+        .onDrop(of: [UTType.text], isTargeted: folderDropTarget(group.folderId)) { providers in
             guard let fid = group.folderId else { return false }
-            Task { @MainActor in
-                await ChatStore.shared.setFolder(fid, forSessions: sessionIds)
-                refreshSessionList()
-            }
-            return true
-        } isTargeted: { over in
-            if over {
-                dropTargetFolderId = group.folderId
-            } else if dropTargetFolderId == group.folderId {
-                dropTargetFolderId = nil
-            }
+            return handleSessionDrop(providers, into: fid)
         }
         .contextMenu {
             if let fid = group.folderId, let folder = folders.first(where: { $0.id == fid }) {

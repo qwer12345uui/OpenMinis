@@ -1,3 +1,4 @@
+#if !MINIS_IOS15
 import AppIntents
 import Foundation
 
@@ -130,3 +131,4 @@ struct GetSessionStatusIntent: AppIntent {
         return .result(value: status)
     }
 }
+#endif // !MINIS_IOS15

@@ -1,3 +1,4 @@
+#if !MINIS_IOS15
 import AppIntents
 import Foundation
 
@@ -27,3 +28,4 @@ struct ListSessionsIntent: AppIntent {
         return .result(value: lines.joined(separator: "\n"))
     }
 }
+#endif // !MINIS_IOS15

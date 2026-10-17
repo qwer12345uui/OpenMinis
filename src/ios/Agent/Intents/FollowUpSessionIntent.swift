@@ -1,3 +1,4 @@
+#if !MINIS_IOS15
 import AppIntents
 import Foundation
 import UniformTypeIdentifiers
@@ -230,3 +231,4 @@ struct FollowUpSessionIntent: AppIntent {
         }
     }
 }
+#endif // !MINIS_IOS15

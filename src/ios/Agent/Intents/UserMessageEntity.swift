@@ -1,3 +1,4 @@
+#if !MINIS_IOS15
 import AppIntents
 import Foundation
 
@@ -97,3 +98,4 @@ struct UserMessageEntityQuery: EntityQuery {
         return entities
     }
 }
+#endif // !MINIS_IOS15
