@@ -105,6 +105,23 @@ jobs:
           ./deps/prepare_alpine_rootfs.sh
           ./deps/build_rclone_ios.sh
 
+      - name: Probe type-checker tuning flags
+        id: swiftflags
+        run: |
+          set -uo pipefail
+          echo 'let probeValue = 1' > /tmp/probe.swift
+          EXTRA=""
+          if xcrun -sdk iphoneos swiftc -frontend -typecheck \
+               -target arm64-apple-ios15.0 \
+               -solver-expression-time-threshold=20000 \
+               /tmp/probe.swift >/dev/null 2>&1; then
+            EXTRA="-Xfrontend -solver-expression-time-threshold=20000"
+            echo "probe: relaxed expression-time threshold is supported"
+          else
+            echo "probe: threshold flag unsupported on this toolchain, continuing without it"
+          fi
+          echo "EXTRA_SWIFT_FLAGS=$EXTRA" >> "$GITHUB_ENV"
+
       - name: Build Minis.app (unsigned)
         run: |
           set -uo pipefail
@@ -133,6 +150,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
+            OTHER_SWIFT_FLAGS="${EXTRA_SWIFT_FLAGS:-}" \
             ${DEPLOY_ARG} \
             build 2>&1 | tee xcodebuild.log
           STATUS=${PIPESTATUS[0]}
