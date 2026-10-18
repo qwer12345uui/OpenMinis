@@ -57,7 +57,7 @@ public struct BackportHostingConfiguration<Content: View, Background: View>: UIC
         )
     }
 
-    public func makeContentView() -> UIView {
+    public func makeContentView() -> any UIView & UIContentView {
         BackportHostingContentView(content: content, background: background, margins: margins, minSize: minSize)
     }
 

@@ -1557,9 +1557,14 @@ struct AIChatView: View {
                         guard !vm.turnStartedByRetry else { return }
                         // Likewise a sub agent callback that landed in the gap.
                         guard !vm.isProcessing, !vm.turnWasSilentProgrammatic else { return }
-                        let lastAssistantLength = vm.messages.last.flatMap {
-                            $0.role == .assistant ? $0.blocks.reduce(0) { $0 + $1.content.count } : nil
-                        } ?? 0
+                        var lastAssistantLength = 0
+                        if let lastMessage = vm.messages.last, lastMessage.role == .assistant {
+                            var characterCount = 0
+                            for block in lastMessage.blocks {
+                                characterCount += block.content.count
+                            }
+                            lastAssistantLength = characterCount
+                        }
                         if lastAssistantLength < 600 {
                             AppLogger(category: "ContextUsageHint").info("[AutoFocus] +1.5s → inputFocused=true (lastAssistantLength=\(lastAssistantLength))")
                             inputFocused = true
