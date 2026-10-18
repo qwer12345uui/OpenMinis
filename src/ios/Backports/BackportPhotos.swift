@@ -101,10 +101,14 @@ extension URL: BackportTransferable {
 public struct PhotosPickerItem: Hashable, Identifiable {
     public let id: UUID
     public let provider: NSItemProvider
+    /// `PHPickerResult.assetIdentifier` (PHAsset local identifier), when the
+    /// picker was able to supply one. Used to recover creation dates.
+    public let assetIdentifier: String?
 
-    init(provider: NSItemProvider) {
+    init(provider: NSItemProvider, assetIdentifier: String? = nil) {
         self.id = UUID()
         self.provider = provider
+        self.assetIdentifier = assetIdentifier
     }
 
     public static func == (lhs: PhotosPickerItem, rhs: PhotosPickerItem) -> Bool {
@@ -119,6 +123,43 @@ public struct PhotosPickerItem: Hashable, Identifiable {
     /// `URL` and any type conforming to `BackportTransferable`.
     public func loadTransferable<T: BackportTransferable>(type: T.Type) async throws -> T.BackportLoaded? {
         try await T.backportLoad(from: provider)
+    }
+}
+
+// MARK: - iOS 15-safe replacements for `supportedContentTypes` (iOS 17+)
+
+public extension PhotosPickerItem {
+    /// The UTIs the underlying item provider actually advertises. Equivalent to
+    /// SwiftUI's `supportedContentTypes`, which is iOS 17+.
+    var backportContentTypes: [UTType] {
+        provider.registeredTypeIdentifiers.compactMap { UTType($0) }
+    }
+
+    /// `true` when the picked item is a movie. Mirrors
+    /// `supportedContentTypes.contains { $0.conforms(to: .movie) }`.
+    var backportIsVideo: Bool {
+        let types = backportContentTypes
+        if types.isEmpty {
+            return provider.hasItemConformingToTypeIdentifier(UTType.movie.identifier)
+        }
+        if types.contains(where: { $0.conforms(to: .movie) }) { return true }
+        // Some providers only advertise the concrete video UTI (e.g.
+        // public.mpeg-4). `hasItemConformingToTypeIdentifier` still answers
+        // correctly for those.
+        return provider.hasItemConformingToTypeIdentifier(UTType.movie.identifier)
+    }
+
+    /// Filename extension of the first image UTI, matching the original
+    /// `supportedContentTypes.first(where: { $0.conforms(to: .image) })` lookup.
+    var backportFilenameExtension: String? {
+        let types = backportContentTypes
+        if let ext = types.first(where: { $0.conforms(to: .image) })?.preferredFilenameExtension {
+            return ext
+        }
+        return provider.registeredTypeIdentifiers
+            .compactMap { UTType($0) }
+            .first(where: { $0.conforms(to: .image) })?
+            .preferredFilenameExtension
     }
 }
 
@@ -221,7 +262,8 @@ struct BackportPHPickerSheet: UIViewControllerRepresentable {
         }
 
         func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
-            let items = results.map { PhotosPickerItem(provider: $0.itemProvider) }
+            let items = results.map { PhotosPickerItem(provider: $0.itemProvider,
+                                                       assetIdentifier: $0.assetIdentifier) }
             switch parent.mode {
             case .multi(let binding):
                 binding.wrappedValue = items

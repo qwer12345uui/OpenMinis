@@ -1236,7 +1236,7 @@ struct AIChatView: View {
             // (success → real thumbnail, failure → error chip). The send button is
             // gated on `hasLoadingAttachments` until every item settles.
             let kinds = items.map { item -> InputAttachment.Kind in
-                item.supportedContentTypes.contains(where: { $0.conforms(to: .movie) }) ? .video : .image
+                item.backportIsVideo ? .video : .image
             }
             let placeholderIDs = vm.addLoadingPlaceholders(kinds: kinds)
 
@@ -1244,15 +1244,13 @@ struct AIChatView: View {
             // concurrent loaders don't touch SwiftUI state or PhotosUI mid-flight.
             struct PickJob { let id: UUID; let item: PhotosPickerItem; let isVideo: Bool; let ext: String?; let date: Date? }
             let jobs: [PickJob] = zip(placeholderIDs, items).map { pid, item in
-                let isVideo = item.supportedContentTypes.contains(where: { $0.conforms(to: .movie) })
+                let isVideo = item.backportIsVideo
                 var assetDate: Date?
-                if let aid = item.itemIdentifier,
+                if let aid = item.assetIdentifier,
                    let asset = PHAsset.fetchAssets(withLocalIdentifiers: [aid], options: nil).firstObject {
                     assetDate = asset.creationDate
                 }
-                let ext = item.supportedContentTypes
-                    .first(where: { $0.conforms(to: .image) })?
-                    .preferredFilenameExtension
+                let ext = item.backportFilenameExtension
                 return PickJob(id: pid, item: item, isVideo: isVideo, ext: ext, date: assetDate)
             }
             selectedPhotoItems = []
