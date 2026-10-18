@@ -41,7 +41,7 @@ private final class CachedViewModel: ObservableObject {
                     await vm?.loadSession()
                 }
             }
-            minisLogger.info("🔑DRAFT CachedViewModel.init sessionId=" + String(sessionId) + " vm=" + String(cached.vmInstanceId) + " isNew=" + String(isNew))
+            minisLogger.info("🔑DRAFT CachedViewModel.init sessionId=\(sessionId) vm=\(cached.vmInstanceId) isNew=\(isNew)")
         } else {
             let draft = ViewModelCache.shared.createDraft()
             self.vm = draft
@@ -510,222 +510,236 @@ struct AIChatView: View {
     @State private var missingMinisFileName: String?
 
     var body: some View {
-        ZStack {
-            // Messages — floating tool preview overlaid at bottom
-            messagesArea
-                .safeAreaInset(edge: .top, spacing: 0) {
-                    // Error banner
-                    if let error = vm.errorMessage {
-                        errorBanner(error)
-                    }
-                    // Transient notice (e.g. request-level image budget
-                    // elision). Auto-dismisses after ~4s.
-                    if let notice = vm.transientNotice {
-                        Text(notice)
-                            .font(.system(size: 12))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 12).padding(.vertical, 8)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.black.opacity(0.75))
-                            .onAppear {
-                                let captured = notice
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
-                                    if vm.transientNotice == captured {
-                                        vm.transientNotice = nil
-                                    }
-                                }
-                            }
-                    }
-                }
-                .overlay(alignment: .bottom) {
-                    // Tool preview + input bar stacked at the bottom.
-                    // Both overlay on top of the message list for immersive scrolling.
-                    //
-                    // The slash / mention popup is attached to THIS stack as
-                    // a `.overlay(alignment: .bottom)` on a placeholder
-                    // sitting just above the input bar — that way SwiftUI's
-                    // own layout pins the popup's bottom edge to the input
-                    // bar's top edge directly, with no `inputBarHeight`
-                    // @State round-trip and no screen-bottom math. The
-                    // popup follows the input bar automatically when
-                    // attachments / waveform expand it, when the keyboard
-                    // animates, or when safe-area insets change.
-                    //
-                    // Popup uses the EXACT same constraint toolbar uses
-                    // with inputBar: bottom edge of popup = top edge of
-                    // inputBar, with the SAME gap (i.e. whatever VStack
-                    // spacing produces between toolbar and inputBar —
-                    // which is 0 here, the visual gap toolbar exhibits
-                    // comes from its own internal padding).
-                    //
-                    // To achieve this without re-implementing layout
-                    // math: popup is an `.overlay(alignment: .top)` on
-                    // the inputBar with `alignmentGuide(.top){$0[.bottom]}`
-                    // — this anchors popup's BOTTOM to inputBar's TOP.
-                    // The popup card carries its OWN bottom padding
-                    // equal to what the toolbar's own internal bottom
-                    // spacing produces, so the visual gap is identical
-                    // whether toolbar is visible or not. Popup ALWAYS
-                    // sits flush with inputBar top, covering the toolbar
-                    // when it's also there.
-                    // Wrap input stack in a ZStack so the popup can have a
-                    // sibling-level frame (full ZStack size) with proper hit
-                    // testing — `.overlay(alignment: .top)` on inputBar was
-                    // failing to receive touches for the popup card because
-                    // SwiftUI doesn't hit-test overlay content drawn outside
-                    // the host's own frame.
-                    //
-                    // Layout structure (z-order bottom→top inside ZStack):
-                    //   1. VStack { toolbar; inputBar } — anchored .bottom
-                    //   2. Popup with alignmentGuide pinning its BOTTOM
-                    //      edge to inputBar's TOP edge — also anchored
-                    //      .bottom, but `alignmentGuide(.bottom) { d in
-                    //      d[.bottom] + inputBarHeight }` would require
-                    //      reading inputBar height again. Instead we use
-                    //      `.padding(.bottom, inputBarHeight)` so the
-                    //      popup's bottom edge sits exactly at inputBar's
-                    //      top edge. inputBarHeight here is just the input
-                    //      bar (NOT including toolbar) so popup covers
-                    //      toolbar when both visible.
-                    ZStack(alignment: .bottom) {
-                        // Tap-outside catcher placed UNDER the popup (declared
-                        // first → lower z-order). When the popup is visible,
-                        // the catcher fills the ZStack and absorbs taps that
-                        // land outside the popup card. Taps on the popup
-                        // itself naturally fall through to the popup view
-                        // because it sits on top in z-order.
-                        if vm.showSlashMenu || vm.showMentionMenu {
-                            Color.clear
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    if vm.showSlashMenu { vm.dismissSlashMenu() }
-                                    else if vm.showMentionMenu { vm.dismissMentionMenu() }
-                                }
-                        }
-                        VStack(spacing: 0) {
-                            floatingToolPreview
-                                .shadow(color: Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0, alpha: 0.25) : UIColor(white: 0, alpha: 0) }), radius: 6, x: 0, y: 4)
-                            #if DEBUG
-                            if isReadOnly {
-                                forkBanner
-                            } else {
-                                inputBar
-                            }
-                            #else
-                            inputBar
-                            #endif
-                        }
-                        // Register the composer (tool preview + input bar) as a
-                        // region the global speech capsule must not cover.
-                        .capsuleProtectedFrame("inputBar")
-                        // [T-p1-delegate-task] Hosted on the stable VStack, not on
-                        // the capsule itself: the capsule unmounts the moment the
-                        // helper finishes, which would yank an open sheet away.
-                        // [T-agent-transcript-halfsheet] Same resizable sheet as
-                        // the tool-sheet route, so the transcript looks and
-                        // behaves the same whichever way it was opened. This
-                        // route now serves only openers that have no tool sheet
-                        // of their own (notification tap, intent, debug RPC);
-                        // opening from a tool sheet stacks on that sheet instead.
-                        .sheet(item: $helperSheetTarget) { target in
-                            HelperTranscriptPage(target: target)
-                                .helperTranscriptSheetStyle()
-                        }
-                        .sheet(item: $agentCallbackDetail) { target in
-                            // [T-agent-result-display] Same frame as any other
-                            // tool result (nav bar + bottom status bar), with
-                            // HelperDetailCard as the body.
-                            ToolLiveSheet(toolBlocks: [target.block], initialIdx: 0, browserPool: nil)
-                        }
-                        .onReceive(NotificationCenter.default.publisher(for: .openAgentCallback)) { note in
-                            if let block = note.userInfo?["block"] as? AssistantBlock {
-                                agentCallbackDetail = AgentCallbackDetailTarget(block: block)
-                                return
-                            }
-                            guard let cb = note.userInfo?["callback"] as? AgentCallback else { return }
-                            if let sid = note.userInfo?["sessionId"] as? String, !sid.isEmpty,
-                               let mine = vm.sessionId, sid != mine { return }
-                            agentCallbackDetail = AgentCallbackDetailTarget(callback: cb)
-                        }
-                        .onReceive(NotificationCenter.default.publisher(for: .openHelperSheet)) { note in
-                            guard let childId = note.userInfo?["childSessionId"] as? String else { return }
-                            if let parent = note.userInfo?["parentSessionId"] as? String, !parent.isEmpty,
-                               let mine = vm.sessionId, parent != mine { return }
-                            let title = (note.userInfo?["title"] as? String) ?? ""
-                            helperSheetTarget = HelperSheetTarget(id: childId, title: title)
-                        }
-                        inputPopupOverlay
-                            .padding(.bottom, inputBarHeight)
-                    }
-                }
-                // Collapse the expanded speech player on a tap anywhere in the chat
-                // area. Attached as a SIMULTANEOUS TapGesture directly on the content
-                // (no full-screen hit-test overlay, which blocked scrolling) so a tap
-                // collapses the player while scroll/drag still work normally. The tap
-                // only acts when the player is expanded; otherwise it's a no-op.
-                .simultaneousGesture(
-                    TapGesture().onEnded {
-                        if vm.speakEnabled && vm.speechPlayerExpanded {
-                            withAnimation(.easeInOut(duration: 0.16)) {
-                                vm.speechPlayerExpanded = false
-                            }
-                        }
-                    }
-                )
-                .overlay(alignment: .bottomTrailing) {
-                    floatingSpeechButton
-                }
-                .overlay {
-                    // Session-loading indicator, two flavors by scenario:
-                    //  • ENTERING the session (first load, nothing rendered yet)
-                    //    → centered soft loading card with a gentle fade+scale
-                    //    exit, replacing the abrupt bare system spinner.
-                    //  • Any LATER reload (iCloud sync, compaction, stale-cache
-                    //    refresh) while content is on screen → keep the small
-                    //    unobtrusive spinner; the big card must never cover
-                    //    content the user is already reading.
-                    ZStack {
-                        // Pre-load window: isLoadingSession only flips once
-                        // loadSession() actually begins (onAppear → Task →
-                        // repairSessionIfNeeded → loadSession), so gating the
-                        // card on it alone left a blank screen for that gap.
-                        // Treat "real session, nothing loaded yet" as loading
-                        // from the very first frame of the push.
-                        let enteringUnloaded = sessionId != nil
-                            && vm.messages.isEmpty
-                            && !vm.hasCompletedInitialLoad
-                        if (vm.isLoadingSession || enteringUnloaded) && vm.messages.isEmpty {
-                            // Entering: nothing rendered yet — show the dots.
-                            // In-place reloads with content on screen (iCloud
-                            // sync fetch → reloadMessagesFromDB → loadSession
-                            // right after entry is the common case) show NO
-                            // overlay at all: the content stays visible and
-                            // interactive, and a centered gray "…" right after
-                            // the blue entry dots read as a glitch, not
-                            // feedback (user report 2026-07-06).
-                            SessionLoadingCard()
-                                .transition(.opacity.combined(with: .scale(scale: 0.92)))
-                                .accessibilityIdentifier("sessionLoadingCard")
-                        }
-                    }
-                    .animation(.easeOut(duration: 0.28), value: vm.isLoadingSession)
-                    .allowsHitTesting(false)
-                }
-                .overlay {
-                    SessionLockGateOverlay(sessionId: vm.sessionId)
-                }
-                .onChange(of: vm.isLoadingSession) { newValue in
-                    // [SpinnerTrace] Every transition of the
-                    // session-loading overlay logged, so we can confirm
-                    // whether a center-spinner report corresponds to
-                    // this overlay or some other ProgressView in the
-                    // chat.
-                    minisLogger.warning("[SpinnerTrace] isLoadingSession → " + String(newValue) + " sid=" + String(vm.sessionId?.prefix(8) ?? "nil") + " msgs=" + String(vm.messages.count))
-                }
+        bodyStage5
+    }
 
-            // Full-screen kernel boot overlay
-            kernelBootOverlay
-        }
+    // [ios15-typecheck] The single ~950-line `body` expression went over the type
+    // checker's budget once the iOS 15 backports were applied (it reported
+    // "unable to type-check this expression in reasonable time" at unrelated
+    // statements inside the chain). The chain is split into stages here; each
+    // stage applies the next slice of modifiers to the previous one, so the
+    // resulting view tree is identical to the single expression.
+    private var bodyStage0: some View {
+    ZStack {
+        // Messages — floating tool preview overlaid at bottom
+        messagesArea
+            .safeAreaInset(edge: .top, spacing: 0) {
+                // Error banner
+                if let error = vm.errorMessage {
+                    errorBanner(error)
+                }
+                // Transient notice (e.g. request-level image budget
+                // elision). Auto-dismisses after ~4s.
+                if let notice = vm.transientNotice {
+                    Text(notice)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12).padding(.vertical, 8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.black.opacity(0.75))
+                        .onAppear {
+                            let captured = notice
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
+                                if vm.transientNotice == captured {
+                                    vm.transientNotice = nil
+                                }
+                            }
+                        }
+                }
+            }
+            .overlay(alignment: .bottom) {
+                // Tool preview + input bar stacked at the bottom.
+                // Both overlay on top of the message list for immersive scrolling.
+                //
+                // The slash / mention popup is attached to THIS stack as
+                // a `.overlay(alignment: .bottom)` on a placeholder
+                // sitting just above the input bar — that way SwiftUI's
+                // own layout pins the popup's bottom edge to the input
+                // bar's top edge directly, with no `inputBarHeight`
+                // @State round-trip and no screen-bottom math. The
+                // popup follows the input bar automatically when
+                // attachments / waveform expand it, when the keyboard
+                // animates, or when safe-area insets change.
+                //
+                // Popup uses the EXACT same constraint toolbar uses
+                // with inputBar: bottom edge of popup = top edge of
+                // inputBar, with the SAME gap (i.e. whatever VStack
+                // spacing produces between toolbar and inputBar —
+                // which is 0 here, the visual gap toolbar exhibits
+                // comes from its own internal padding).
+                //
+                // To achieve this without re-implementing layout
+                // math: popup is an `.overlay(alignment: .top)` on
+                // the inputBar with `alignmentGuide(.top){$0[.bottom]}`
+                // — this anchors popup's BOTTOM to inputBar's TOP.
+                // The popup card carries its OWN bottom padding
+                // equal to what the toolbar's own internal bottom
+                // spacing produces, so the visual gap is identical
+                // whether toolbar is visible or not. Popup ALWAYS
+                // sits flush with inputBar top, covering the toolbar
+                // when it's also there.
+                // Wrap input stack in a ZStack so the popup can have a
+                // sibling-level frame (full ZStack size) with proper hit
+                // testing — `.overlay(alignment: .top)` on inputBar was
+                // failing to receive touches for the popup card because
+                // SwiftUI doesn't hit-test overlay content drawn outside
+                // the host's own frame.
+                //
+                // Layout structure (z-order bottom→top inside ZStack):
+                //   1. VStack { toolbar; inputBar } — anchored .bottom
+                //   2. Popup with alignmentGuide pinning its BOTTOM
+                //      edge to inputBar's TOP edge — also anchored
+                //      .bottom, but `alignmentGuide(.bottom) { d in
+                //      d[.bottom] + inputBarHeight }` would require
+                //      reading inputBar height again. Instead we use
+                //      `.padding(.bottom, inputBarHeight)` so the
+                //      popup's bottom edge sits exactly at inputBar's
+                //      top edge. inputBarHeight here is just the input
+                //      bar (NOT including toolbar) so popup covers
+                //      toolbar when both visible.
+                ZStack(alignment: .bottom) {
+                    // Tap-outside catcher placed UNDER the popup (declared
+                    // first → lower z-order). When the popup is visible,
+                    // the catcher fills the ZStack and absorbs taps that
+                    // land outside the popup card. Taps on the popup
+                    // itself naturally fall through to the popup view
+                    // because it sits on top in z-order.
+                    if vm.showSlashMenu || vm.showMentionMenu {
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                if vm.showSlashMenu { vm.dismissSlashMenu() }
+                                else if vm.showMentionMenu { vm.dismissMentionMenu() }
+                            }
+                    }
+                    VStack(spacing: 0) {
+                        floatingToolPreview
+                            .shadow(color: Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0, alpha: 0.25) : UIColor(white: 0, alpha: 0) }), radius: 6, x: 0, y: 4)
+                        #if DEBUG
+                        if isReadOnly {
+                            forkBanner
+                        } else {
+                            inputBar
+                        }
+                        #else
+                        inputBar
+                        #endif
+                    }
+                    // Register the composer (tool preview + input bar) as a
+                    // region the global speech capsule must not cover.
+                    .capsuleProtectedFrame("inputBar")
+                    // [T-p1-delegate-task] Hosted on the stable VStack, not on
+                    // the capsule itself: the capsule unmounts the moment the
+                    // helper finishes, which would yank an open sheet away.
+                    // [T-agent-transcript-halfsheet] Same resizable sheet as
+                    // the tool-sheet route, so the transcript looks and
+                    // behaves the same whichever way it was opened. This
+                    // route now serves only openers that have no tool sheet
+                    // of their own (notification tap, intent, debug RPC);
+                    // opening from a tool sheet stacks on that sheet instead.
+                    .sheet(item: $helperSheetTarget) { target in
+                        HelperTranscriptPage(target: target)
+                            .helperTranscriptSheetStyle()
+                    }
+                    .sheet(item: $agentCallbackDetail) { target in
+                        // [T-agent-result-display] Same frame as any other
+                        // tool result (nav bar + bottom status bar), with
+                        // HelperDetailCard as the body.
+                        ToolLiveSheet(toolBlocks: [target.block], initialIdx: 0, browserPool: nil)
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: .openAgentCallback)) { note in
+                        if let block = note.userInfo?["block"] as? AssistantBlock {
+                            agentCallbackDetail = AgentCallbackDetailTarget(block: block)
+                            return
+                        }
+                        guard let cb = note.userInfo?["callback"] as? AgentCallback else { return }
+                        if let sid = note.userInfo?["sessionId"] as? String, !sid.isEmpty,
+                           let mine = vm.sessionId, sid != mine { return }
+                        agentCallbackDetail = AgentCallbackDetailTarget(callback: cb)
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: .openHelperSheet)) { note in
+                        guard let childId = note.userInfo?["childSessionId"] as? String else { return }
+                        if let parent = note.userInfo?["parentSessionId"] as? String, !parent.isEmpty,
+                           let mine = vm.sessionId, parent != mine { return }
+                        let title = (note.userInfo?["title"] as? String) ?? ""
+                        helperSheetTarget = HelperSheetTarget(id: childId, title: title)
+                    }
+                    inputPopupOverlay
+                        .padding(.bottom, inputBarHeight)
+                }
+            }
+            // Collapse the expanded speech player on a tap anywhere in the chat
+            // area. Attached as a SIMULTANEOUS TapGesture directly on the content
+            // (no full-screen hit-test overlay, which blocked scrolling) so a tap
+            // collapses the player while scroll/drag still work normally. The tap
+            // only acts when the player is expanded; otherwise it's a no-op.
+            .simultaneousGesture(
+                TapGesture().onEnded {
+                    if vm.speakEnabled && vm.speechPlayerExpanded {
+                        withAnimation(.easeInOut(duration: 0.16)) {
+                            vm.speechPlayerExpanded = false
+                        }
+                    }
+                }
+            )
+            .overlay(alignment: .bottomTrailing) {
+                floatingSpeechButton
+            }
+            .overlay {
+                // Session-loading indicator, two flavors by scenario:
+                //  • ENTERING the session (first load, nothing rendered yet)
+                //    → centered soft loading card with a gentle fade+scale
+                //    exit, replacing the abrupt bare system spinner.
+                //  • Any LATER reload (iCloud sync, compaction, stale-cache
+                //    refresh) while content is on screen → keep the small
+                //    unobtrusive spinner; the big card must never cover
+                //    content the user is already reading.
+                ZStack {
+                    // Pre-load window: isLoadingSession only flips once
+                    // loadSession() actually begins (onAppear → Task →
+                    // repairSessionIfNeeded → loadSession), so gating the
+                    // card on it alone left a blank screen for that gap.
+                    // Treat "real session, nothing loaded yet" as loading
+                    // from the very first frame of the push.
+                    let enteringUnloaded = sessionId != nil
+                        && vm.messages.isEmpty
+                        && !vm.hasCompletedInitialLoad
+                    if (vm.isLoadingSession || enteringUnloaded) && vm.messages.isEmpty {
+                        // Entering: nothing rendered yet — show the dots.
+                        // In-place reloads with content on screen (iCloud
+                        // sync fetch → reloadMessagesFromDB → loadSession
+                        // right after entry is the common case) show NO
+                        // overlay at all: the content stays visible and
+                        // interactive, and a centered gray "…" right after
+                        // the blue entry dots read as a glitch, not
+                        // feedback (user report 2026-07-06).
+                        SessionLoadingCard()
+                            .transition(.opacity.combined(with: .scale(scale: 0.92)))
+                            .accessibilityIdentifier("sessionLoadingCard")
+                    }
+                }
+                .animation(.easeOut(duration: 0.28), value: vm.isLoadingSession)
+                .allowsHitTesting(false)
+            }
+            .overlay {
+                SessionLockGateOverlay(sessionId: vm.sessionId)
+            }
+            .onChange(of: vm.isLoadingSession) { newValue in
+                // [SpinnerTrace] Every transition of the
+                // session-loading overlay logged, so we can confirm
+                // whether a center-spinner report corresponds to
+                // this overlay or some other ProgressView in the
+                // chat.
+                minisLogger.warning("[SpinnerTrace] isLoadingSession → \(newValue) sid=\(vm.sessionId?.prefix(8) ?? "nil") msgs=\(vm.messages.count)")
+            }
+
+        // Full-screen kernel boot overlay
+        kernelBootOverlay
+    }
+    }
+
+    private var bodyStage1: some View {
+        bodyStage0
         .background(ChatColors.background)
         .onDrop(of: [.image, .movie, .fileURL, .data], isTargeted: $isDropTargeted) { providers in
             handleDropProviders(providers)
@@ -857,6 +871,10 @@ struct AIChatView: View {
         } message: {
             Text(AppLocalized("Conversation context is nearly full. Compact the history to free up space before sending. Enabling auto-compact will do this automatically from now on."))
         }
+    }
+
+    private var bodyStage2: some View {
+        bodyStage1
         .alert(AppLocalized("Context Full"), isPresented: Binding(get: { vm.showContextExhaustedPrompt }, set: { vm.showContextExhaustedPrompt = $0 })) {
             Button(AppLocalized("New Session")) {
                 vm.showContextExhaustedPrompt = false
@@ -979,6 +997,10 @@ struct AIChatView: View {
         // no Share/Done at all. .quickLookPreview presents the controller
         // itself full-screen, which brings the standard toolbar (Done, share
         // sheet, markup where supported) exactly as in Files.app.
+    }
+
+    private var bodyStage3: some View {
+        bodyStage2
         .quickLookPreview($previewDocumentFile)
         .sheet(item: $shareFile) { fileURL in
             MinisShareSheet(url: fileURL)
@@ -1151,6 +1173,10 @@ struct AIChatView: View {
                 }
             }
         }
+    }
+
+    private var bodyStage4: some View {
+        bodyStage3
         .fullScreenCover(isPresented: $showTerminal) {
             terminalInitCommand = nil
         } content: {
@@ -1188,7 +1214,7 @@ struct AIChatView: View {
             // into separate View structs (v1.10 follow-up).
             AnyView(
                 CameraPicker { image in
-                    minisLogger.info("[QuickAction] CameraPicker onCapture size=" + String(Int(image.size.width)) + "x" + String(Int(image.size.height)))
+                    minisLogger.info("[QuickAction] CameraPicker onCapture size=\(Int(image.size.width))x\(Int(image.size.height))")
                     vm.addImageAttachment(image)
                 }
                 .ignoresSafeArea()
@@ -1276,6 +1302,10 @@ struct AIChatView: View {
         // adopt it as the frontmost one here — this view being mounted IS the
         // "user is looking at it" signal that ensureSessionReturningId (also
         // reachable from RPC/share/intents) can no longer provide.
+    }
+
+    private var bodyStage5: some View {
+        bodyStage4
         .onChange(of: vm.sessionId) { newId in
             if let newId { AIChatViewModel.activeSessionId = newId }
         }
@@ -1294,7 +1324,7 @@ struct AIChatView: View {
         }
         .onChange(of: shareCoordinator.bufferVersion) { newVersion in
             // Warm start: user is already in a session when share arrives
-            minisLogger.info("[Share] AIChatView.onChange(bufferVersion)=" + String(newVersion) + " sessionId=" + String(sessionId ?? "nil") + " draftId=" + String(draftId ?? "nil") + " hasBuffer=" + String(shareCoordinator.pendingShareBuffer != nil))
+            minisLogger.info("[Share] AIChatView.onChange(bufferVersion)=\(newVersion) sessionId=\(sessionId ?? "nil") draftId=\(draftId ?? "nil") hasBuffer=\(shareCoordinator.pendingShareBuffer != nil)")
             injectPendingShareIfNeeded()
         }
         .onDisappear {
@@ -1336,7 +1366,7 @@ struct AIChatView: View {
                 AppLogger(category: "InputBarLayout").info("chat onDisappear — released a lingering first responder (would have left a phantom keyboard inset on the window)")
             }
             // Capsule auto-shows whenever audio is loaded — no manual activation needed.
-            minisLogger.info("🔑DRAFT AIChatView.onDisappear vm=" + String(vm.vmInstanceId) + " sessionId=" + String(sessionId ?? "nil") + " draftId=" + String(draftId ?? "nil") + " vm.sessionId=" + String(vm.sessionId ?? "nil") + " vm.isProcessing=" + String(vm.isProcessing))
+            minisLogger.info("🔑DRAFT AIChatView.onDisappear vm=\(vm.vmInstanceId) sessionId=\(sessionId ?? "nil") draftId=\(draftId ?? "nil") vm.sessionId=\(vm.sessionId ?? "nil") vm.isProcessing=\(vm.isProcessing)")
         }
         // [T-voice-bg-fg-gap] Structural immunity: while the voice panel is up
         // and the transcript editor is NOT open, there is no legitimate keyboard
@@ -1572,7 +1602,7 @@ struct AIChatView: View {
                 vm.forceScrollToBottom.send()
             }
             let totalElapsed = (CFAbsoluteTimeGetCurrent() - reuseStart) * 1000
-            minisLogger.info("[SessionLoad] " + String(sessionId) + " — REUSE: " + String(String(format: "%.1f", totalElapsed)) + "ms [mount: " + String(String(format: "%.1f", mountElapsed)) + " | msgs: " + String(vm.messages.count) + "]")
+            minisLogger.info("[SessionLoad] \(sessionId) — REUSE: \(String(format: "%.1f", totalElapsed))ms [mount: \(String(format: "%.1f", mountElapsed)) | msgs: \(vm.messages.count)]")
         }
     } else {
         minisLogger.info("🔄SESSION AIChatView.onAppear nil sessionId — draft mode")
@@ -1582,7 +1612,7 @@ struct AIChatView: View {
             inputFocused = true
         }
     }
-    minisLogger.info("[Share] AIChatView.onAppear: sessionId=" + String(sessionId ?? "nil") + " bufferVersion=" + String(shareCoordinator.bufferVersion) + " hasBuffer=" + String(shareCoordinator.pendingShareBuffer != nil))
+    minisLogger.info("[Share] AIChatView.onAppear: sessionId=\(sessionId ?? "nil") bufferVersion=\(shareCoordinator.bufferVersion) hasBuffer=\(shareCoordinator.pendingShareBuffer != nil)")
     injectPendingShareIfNeeded()
     injectPendingTransferIfNeeded()
     isChatViewVisible = true
@@ -1615,7 +1645,7 @@ struct AIChatView: View {
     private func tryMarkWorkflowChatReady(reason: String) {
         guard let sid = quickActionMatchId, isChatViewVisible else { return }
         if case .waitingForChatMount(_, let target) = QuickActionWorkflow.shared.state, target == sid {
-            minisLogger.info("[QuickAction] tryMarkWorkflowChatReady reason=" + String(reason) + " sid=" + String(sid))
+            minisLogger.info("[QuickAction] tryMarkWorkflowChatReady reason=\(reason) sid=\(sid)")
             QuickActionWorkflow.shared.markChatReady(sessionId: sid)
         }
     }
@@ -1624,7 +1654,7 @@ struct AIChatView: View {
     /// `chatReady` state. Flips the relevant @State so SwiftUI mounts
     /// the camera sheet / starts speech recognition.
     private func applyQuickAction(_ action: ChatLaunchAction) {
-        minisLogger.info("[QuickAction] applyQuickAction action=" + String(String(describing: action)) + " showCamera=" + String(showCamera) + " hasOverlay=" + String(hasOverlayPresented) + " chatVisible=" + String(isChatViewVisible))
+        minisLogger.info("[QuickAction] applyQuickAction action=\(String(describing: action)) showCamera=\(showCamera) hasOverlay=\(hasOverlayPresented) chatVisible=\(isChatViewVisible)")
         // Guard against late deliveries to a view that already
         // disappeared — workflow re-publishes chatReady on retry and
         // the modifier's onReceive can fire after our onDisappear set
@@ -1713,7 +1743,7 @@ struct AIChatView: View {
         // destination on the buffer before navigating; a nil stamp (cold
         // launch, where the launch flow owns the choice) still passes.
         guard shareCoordinator.bufferTargets(sessionId, draftId: draftId) else {
-            minisLogger.info("[Share] injectPendingShareIfNeeded — buffer is addressed to another session (mine: sessionId=" + String(sessionId ?? "nil") + " draftId=" + String(draftId ?? "nil") + "); leaving it")
+            minisLogger.info("[Share] injectPendingShareIfNeeded — buffer is addressed to another session (mine: sessionId=\(sessionId ?? "nil") draftId=\(draftId ?? "nil")); leaving it")
             return
         }
         guard let pending = shareCoordinator.consumeBuffer() else {
@@ -1725,7 +1755,7 @@ struct AIChatView: View {
         for (i, item) in pending.items.enumerated() {
             switch item.kind {
             case .inlineText:
-                minisLogger.info("[Share] item[" + String(i) + "] inlineText: " + String(String(item.value.prefix(100))))
+                minisLogger.info("[Share] item[\(i)] inlineText: \(String(item.value.prefix(100)))")
                 if !vm.inputText.isEmpty { vm.inputText += "\n" }
                 let text = item.value
                 // Append a trailing space to URLs so the cursor doesn't stick to the link
@@ -1741,7 +1771,7 @@ struct AIChatView: View {
                 }
                 let fileURL = dir.appendingPathComponent(item.value)
                 let exists = FileManager.default.fileExists(atPath: fileURL.path)
-                minisLogger.info("[Share] item[" + String(i) + "] attachment: " + String(item.value) + " exists=" + String(exists) + " path=" + String(fileURL.path))
+                minisLogger.info("[Share] item[\(i)] attachment: \(item.value) exists=\(exists) path=\(fileURL.path)")
                 guard exists else { continue }
                 // [T-ios-json-open-provider-import-prompt] If this is a JSON
                 // Provider export, don't silently attach it — ask the user
@@ -1759,14 +1789,14 @@ struct AIChatView: View {
                     continue
                 }
                 vm.addFileAttachment(from: fileURL)
-                minisLogger.info("[Share] item[" + String(i) + "] addFileAttachment done, attachments count=" + String(self.vm.attachments.count))
+                minisLogger.info("[Share] item[\(i)] addFileAttachment done, attachments count=\(self.vm.attachments.count)")
             }
         }
 
         // Clean up shared files after ingestion
         SharedContainerStore.cleanSharedFiles()
 
-        minisLogger.info("[Share] Injection complete. inputText='" + String(String(self.vm.inputText.prefix(100))) + "' attachments=" + String(self.vm.attachments.count))
+        minisLogger.info("[Share] Injection complete. inputText='\(String(self.vm.inputText.prefix(100)))' attachments=\(self.vm.attachments.count)")
 
         hasInjectedShareContent = true
 
@@ -1813,7 +1843,7 @@ struct AIChatView: View {
         }
 
         ViewModelCache.pendingTransfer = nil
-        minisLogger.info("[MoveTo] Injecting transfer: text='" + String(String(transfer.inputText.prefix(50))) + "' attachments=" + String(transfer.attachments.count) + " existing=" + String(vm.attachments.count))
+        minisLogger.info("[MoveTo] Injecting transfer: text='\(String(transfer.inputText.prefix(50)))' attachments=\(transfer.attachments.count) existing=\(vm.attachments.count)")
         // Clean up any stale unsent attachments on the target VM before injecting
         if !vm.attachments.isEmpty {
             minisLogger.info("[MoveTo] Clearing \(vm.attachments.count) stale attachments from target session")
@@ -3088,7 +3118,7 @@ struct AIChatView: View {
         minisLogger.info("[Drop] handleDropProviders called with \(providers.count) provider(s)")
         for (index, provider) in providers.enumerated() {
             let types = provider.registeredTypeIdentifiers
-            minisLogger.info("[Drop] provider[" + String(index) + "] types=" + String(types) + " suggestedName=" + String(provider.suggestedName ?? "nil"))
+            minisLogger.info("[Drop] provider[\(index)] types=\(types) suggestedName=\(provider.suggestedName ?? "nil")")
 
             // Determine if this provider represents a file (vs. inline text).
             let hasFileType = types.contains { id in
@@ -3101,7 +3131,7 @@ struct AIChatView: View {
                 !($0 as NSString).pathExtension.isEmpty
             } ?? false
 
-            minisLogger.info("[Drop] provider[" + String(index) + "] hasFileType=" + String(hasFileType) + " hasFileName=" + String(hasFileName))
+            minisLogger.info("[Drop] provider[\(index)] hasFileType=\(hasFileType) hasFileName=\(hasFileName)")
 
             guard hasFileType || hasFileName else {
                 minisLogger.info("[Drop] provider[\(index)] SKIPPED — no file type or filename")
@@ -3111,20 +3141,20 @@ struct AIChatView: View {
             // 1. File URL (most common on iPad — files, images, videos, documents)
             let hasFileURL = provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier)
             let canLoadImage = provider.canLoadObject(ofClass: UIImage.self)
-            minisLogger.info("[Drop] provider[" + String(index) + "] hasFileURL=" + String(hasFileURL) + " canLoadImage=" + String(canLoadImage))
+            minisLogger.info("[Drop] provider[\(index)] hasFileURL=\(hasFileURL) canLoadImage=\(canLoadImage)")
 
             if hasFileURL {
                 provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) { item, error in
                     if let error {
-                        minisLogger.error("[Drop] provider[" + String(index) + "] loadItem fileURL error: " + String(error.localizedDescription))
+                        minisLogger.error("[Drop] provider[\(index)] loadItem fileURL error: \(error.localizedDescription)")
                         return
                     }
                     guard let data = item as? Data,
                           let url = URL(dataRepresentation: data, relativeTo: nil) else {
-                        minisLogger.error("[Drop] provider[" + String(index) + "] loadItem fileURL failed to parse — item type: " + String(type(of: item)))
+                        minisLogger.error("[Drop] provider[\(index)] loadItem fileURL failed to parse — item type: \(type(of: item))")
                         return
                     }
-                    minisLogger.info("[Drop] provider[" + String(index) + "] fileURL loaded: " + String(url.path))
+                    minisLogger.info("[Drop] provider[\(index)] fileURL loaded: \(url.path)")
                     DispatchQueue.main.async { vm.addFileAttachment(from: url) }
                 }
                 continue
@@ -3133,14 +3163,14 @@ struct AIChatView: View {
             if canLoadImage {
                 provider.loadObject(ofClass: UIImage.self) { item, error in
                     if let error {
-                        minisLogger.error("[Drop] provider[" + String(index) + "] loadObject UIImage error: " + String(error.localizedDescription))
+                        minisLogger.error("[Drop] provider[\(index)] loadObject UIImage error: \(error.localizedDescription)")
                         return
                     }
                     guard let image = item as? UIImage else {
                         minisLogger.error("[Drop] provider[\(index)] loadObject UIImage returned nil")
                         return
                     }
-                    minisLogger.info("[Drop] provider[" + String(index) + "] UIImage loaded: " + String(image.size))
+                    minisLogger.info("[Drop] provider[\(index)] UIImage loaded: \(image.size)")
                     DispatchQueue.main.async { vm.addImageAttachment(image) }
                 }
                 continue
@@ -3150,10 +3180,10 @@ struct AIChatView: View {
                 guard let ut = UTType(id) else { return false }
                 return ut.conforms(to: .data)
             }) {
-                minisLogger.info("[Drop] provider[" + String(index) + "] fallback loadFileRepresentation contentType=" + String(contentType))
+                minisLogger.info("[Drop] provider[\(index)] fallback loadFileRepresentation contentType=\(contentType)")
                 provider.loadFileRepresentation(forTypeIdentifier: contentType) { url, error in
                     if let error {
-                        minisLogger.error("[Drop] provider[" + String(index) + "] loadFileRepresentation error: " + String(error.localizedDescription))
+                        minisLogger.error("[Drop] provider[\(index)] loadFileRepresentation error: \(error.localizedDescription)")
                         return
                     }
                     guard let url else {
@@ -3164,10 +3194,10 @@ struct AIChatView: View {
                         .appendingPathComponent(UUID().uuidString.prefix(8) + "_" + url.lastPathComponent)
                     do {
                         try FileManager.default.copyItem(at: url, to: tmp)
-                        minisLogger.info("[Drop] provider[" + String(index) + "] file copied to: " + String(tmp.path))
+                        minisLogger.info("[Drop] provider[\(index)] file copied to: \(tmp.path)")
                         DispatchQueue.main.async { vm.addFileAttachment(from: tmp) }
                     } catch {
-                        minisLogger.error("[Drop] provider[" + String(index) + "] copyItem failed: " + String(error.localizedDescription))
+                        minisLogger.error("[Drop] provider[\(index)] copyItem failed: \(error.localizedDescription)")
                     }
                 }
                 continue
@@ -3904,7 +3934,7 @@ struct AIChatView: View {
                     didSeedInputBarHeight = true
                     inputBarHeightDebounce?.cancel()
                     inputBarHeight = newH
-                    AppLogger(category: "InputBarLayout").info("inputBarHeight seeded=" + String(newH) + " x=" + String(Int(frame.minX)))
+                    AppLogger(category: "InputBarLayout").info("inputBarHeight seeded=\(newH) x=\(Int(frame.minX))")
                     // [T-inputbar-stale-across-reentry] The seed is applied
                     // SYNCHRONOUSLY (the message list needs a bottom inset on its
                     // very first pass, else it scrolls to a fake bottom). That
@@ -3922,7 +3952,7 @@ struct AIChatView: View {
                         let settled = latestInputBarFrameH
                         if settled > 0, abs(settled - newH) > 0.5 {
                             inputBarHeight = settled
-                            AppLogger(category: "InputBarLayout").info("inputBarHeight SEED-CORRECTED " + String(newH) + "→" + String(settled) + " — seed had caught an animation frame")
+                            AppLogger(category: "InputBarLayout").info("inputBarHeight SEED-CORRECTED \(newH)→\(settled) — seed had caught an animation frame")
                         }
                     }
                     return
@@ -3935,7 +3965,7 @@ struct AIChatView: View {
                 // Wait 300ms (> animation duration 200ms) to capture the settled
                 // post-animation value.
                 guard onscreen else {
-                    AppLogger(category: "InputBarLayout").info("inputBarHeight discarded=" + String(newH) + " offscreen x=" + String(Int(frame.minX)) + "…" + String(Int(frame.maxX)) + " win=" + String(Int(hostWindow.minX)) + "…" + String(Int(hostWindow.maxX)))
+                    AppLogger(category: "InputBarLayout").info("inputBarHeight discarded=\(newH) offscreen x=\(Int(frame.minX))…\(Int(frame.maxX)) win=\(Int(hostWindow.minX))…\(Int(hostWindow.maxX))")
                     return
                 }
                 inputBarHeightDebounce?.cancel()
@@ -3957,14 +3987,14 @@ struct AIChatView: View {
                     // is wrong for the voice panel (~161pt compact). Discard
                     // if the branch flipped back by the time debounce fires.
                     if voiceAtCapture != voiceInputActive {
-                        AppLogger(category: "InputBarLayout").info("inputBarHeight discarded=" + String(newH) + " branchSwap voice=" + String(voiceAtCapture) + "→" + String(voiceInputActive))
+                        AppLogger(category: "InputBarLayout").info("inputBarHeight discarded=\(newH) branchSwap voice=\(voiceAtCapture)→\(voiceInputActive)")
                         return
                     }
                     // Commit the LATEST height, not the one that armed the timer.
                     let committed = latestInputBarFrameH > 0 ? latestInputBarFrameH : newH
                     inputBarHeight = committed
                     let armed = newH
-                    AppLogger(category: "InputBarLayout").info("inputBarHeight settled=" + String(committed) + " x=" + String(Int(frame.minX)) + String(abs(committed - armed) > 0.5 ? " (armedWith=\(armed), used latest)" : ""))
+                    AppLogger(category: "InputBarLayout").info("inputBarHeight settled=\(committed) x=\(Int(frame.minX))\(abs(committed - armed) > 0.5 ? " (armedWith=\(armed), used latest)" : "")")
 
                     // [T-voice-inputbar-anim-tail] Settle-confirm. Even the
                     // latest recorded frame can be a tail sample if the final
@@ -3981,7 +4011,7 @@ struct AIChatView: View {
                     let settled = latestInputBarFrameH
                     if settled > 0, abs(settled - committed) > 0.5 {
                         inputBarHeight = settled
-                        AppLogger(category: "InputBarLayout").info("inputBarHeight CORRECTED " + String(committed) + "→" + String(settled) + " — commit had caught an animation-tail frame")
+                        AppLogger(category: "InputBarLayout").info("inputBarHeight CORRECTED \(committed)→\(settled) — commit had caught an animation-tail frame")
                     }
                 }
             }
@@ -4789,7 +4819,7 @@ struct AIChatView: View {
         // Intercept slash commands — execute instead of sending to LLM
         if vm.tryExecuteInputAsSlashCommand() { return }
 
-        minisLogger.info("🔑DRAFT performSend vm=" + String(vm.vmInstanceId) + " vm.sessionId=" + String(vm.sessionId ?? "nil") + " draftId=" + String(draftId ?? "nil") + " inputText='" + String(String(vm.inputText.prefix(50))) + "' isProcessing=" + String(vm.isProcessing))
+        minisLogger.info("🔑DRAFT performSend vm=\(vm.vmInstanceId) vm.sessionId=\(vm.sessionId ?? "nil") draftId=\(draftId ?? "nil") inputText='\(String(vm.inputText.prefix(50)))' isProcessing=\(vm.isProcessing)")
         // Keep SwiftUI focus when a hardware keyboard is connected — dropping
         // it would force the user to tap the field again before typing the
         // next message. With only the software keyboard, clear focus and
@@ -5307,7 +5337,7 @@ private struct EquatableByValue<Key: Equatable, Content: View>: View, Equatable 
         #if DEBUG
         let _ = {
             NavbarEvalStats.titleEval += 1
-            NavbarEvalStats.logger.info("[NavbarEval] titleEval=" + String(NavbarEvalStats.titleEval) + " (toolbarPass=" + String(NavbarEvalStats.toolbarPass) + ")")
+            NavbarEvalStats.logger.info("[NavbarEval] titleEval=\(NavbarEvalStats.titleEval) (toolbarPass=\(NavbarEvalStats.toolbarPass))")
         }()
         #endif
         content()
@@ -5428,7 +5458,7 @@ private struct ChatToolbarHost<Title: View, Trailing: View>: View, Equatable {
         #if DEBUG
         let _ = {
             NavbarEvalStats.titleEval += 1
-            NavbarEvalStats.logger.info("[NavbarEval] toolbarHostEval=" + String(NavbarEvalStats.titleEval) + " (toolbarPass=" + String(NavbarEvalStats.toolbarPass) + ")")
+            NavbarEvalStats.logger.info("[NavbarEval] toolbarHostEval=\(NavbarEvalStats.titleEval) (toolbarPass=\(NavbarEvalStats.toolbarPass))")
         }()
         #endif
         Color.clear
@@ -5515,7 +5545,7 @@ private struct ChatTrailingMenu: View, Equatable {
         #if DEBUG
         let _ = {
             NavbarEvalStats.menuEval += 1
-            NavbarEvalStats.logger.info("[NavbarEval] menuEval=" + String(NavbarEvalStats.menuEval) + " (toolbarPass=" + String(NavbarEvalStats.toolbarPass) + ")")
+            NavbarEvalStats.logger.info("[NavbarEval] menuEval=\(NavbarEvalStats.menuEval) (toolbarPass=\(NavbarEvalStats.toolbarPass))")
         }()
         #endif
         return Menu {
@@ -5769,7 +5799,7 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
         button.menu = Self.buildMenu(key: key, coordinator: context.coordinator)
         #if DEBUG
         NavbarEvalStats.menuEval += 1
-        NavbarEvalStats.logger.info("[NavbarEval] uikitMenuRebuild=" + String(NavbarEvalStats.menuEval) + " (toolbarPass=" + String(NavbarEvalStats.toolbarPass) + ")")
+        NavbarEvalStats.logger.info("[NavbarEval] uikitMenuRebuild=\(NavbarEvalStats.menuEval) (toolbarPass=\(NavbarEvalStats.toolbarPass))")
         #endif
     }
 
@@ -6968,7 +6998,7 @@ private extension AIChatView {
             if didSeedInputBarHeight,
                latestH <= 0 || abs(latestH - committedH) > 0.5 {
                 didSeedInputBarHeight = false
-                AppLogger(category: "InputBarLayout").info("[voice-bgfg] scene active — composer geometry stale (committed=" + String(committedH) + " latest=" + String(latestH) + " lastReport=" + String(String(format: "%.1f", sinceReport)) + "s ago); re-arming seed so the next callback re-measures")
+                AppLogger(category: "InputBarLayout").info("[voice-bgfg] scene active — composer geometry stale (committed=\(committedH) latest=\(latestH) lastReport=\(String(format: "%.1f", sinceReport))s ago); re-arming seed so the next callback re-measures")
             }
 
             // [T-voice-inputbar-collapse-selfheal] Re-arming only makes the
@@ -6987,9 +7017,9 @@ private extension AIChatView {
                 let ticked = inputBarGeometryTick != probeBaseline
                 let age = inputBarLastGeometryAt.map { CFAbsoluteTimeGetCurrent() - $0 } ?? -1
                 if ticked {
-                    AppLogger(category: "InputBarLayout").info("[InputBarHealth] OK after foreground — composer re-reported geometry (h=" + String(latestInputBarFrameH) + " committed=" + String(inputBarHeight) + ")")
+                    AppLogger(category: "InputBarLayout").info("[InputBarHealth] OK after foreground — composer re-reported geometry (h=\(latestInputBarFrameH) committed=\(inputBarHeight))")
                 } else {
-                    AppLogger(category: "InputBarLayout").error("[InputBarHealth] STALLED — no geometry callback 900ms after foreground. committed=" + String(inputBarHeight) + " latest=" + String(latestInputBarFrameH) + " lastReport=" + String(String(format: "%.1f", age)) + "s ago voice=" + String(voiceInputActive) + " editing=" + String(voiceVM.isEditingTranscript) + " seeded=" + String(didSeedInputBarHeight) + ". The composer host is not laying out; expect a blank bottom area. Leaving and re-entering the session rebuilds it.")
+                    AppLogger(category: "InputBarLayout").error("[InputBarHealth] STALLED — no geometry callback 900ms after foreground. committed=\(inputBarHeight) latest=\(latestInputBarFrameH) lastReport=\(String(format: "%.1f", age))s ago voice=\(voiceInputActive) editing=\(voiceVM.isEditingTranscript) seeded=\(didSeedInputBarHeight). The composer host is not laying out; expect a blank bottom area. Leaving and re-entering the session rebuilds it.")
                 }
             }
             // [T-voice-bg-fg-gap] Foreground reseal: if we return to a
@@ -7025,7 +7055,7 @@ private extension AIChatView {
             if let keyWindow {
                 let hadResponder = keyWindow.endEditing(true)
                 UIView.performWithoutAnimation { keyWindow.layoutIfNeeded() }
-                AppLogger(category: "InputBarLayout").info("[voice-bgfg] scene " + String(phase == .inactive ? "inactive" : "background") + " — forced keyboard-dismiss completion (hadResponder=" + String(hadResponder) + ") voice=" + String(voiceInputActive) + " editing=" + String(voiceVM.isEditingTranscript))
+                AppLogger(category: "InputBarLayout").info("[voice-bgfg] scene \(phase == .inactive ? "inactive" : "background") — forced keyboard-dismiss completion (hadResponder=\(hadResponder)) voice=\(voiceInputActive) editing=\(voiceVM.isEditingTranscript)")
             }
         }
         if phase != .active, speechManager.state == .recording {
