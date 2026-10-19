@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import QuickLook
 
 // MARK: - AnyShape (iOS 16 backport)
 
@@ -512,5 +513,62 @@ public extension Locale {
             return region?.identifier
         }
         return regionCode
+    }
+}
+
+// MARK: - quickLookPreview (iOS 16 backport)
+//
+// SwiftUI's `.quickLookPreview(_:)` is iOS 16.0+. Referencing it from code
+// that also runs on iOS 15 build-links `_QuickLook_SwiftUI.framework` into
+// the app; dyld then refuses to launch the whole process on iOS 15 with
+// "Library not loaded: /System/Library/Frameworks/_QuickLook_SwiftUI.framework".
+// Wrapping the call in an availability check keeps the reference weak, and
+// iOS 15 gets an equivalent QLPreviewController presented in a sheet.
+
+public extension View {
+    /// iOS 15-safe replacement for `View.quickLookPreview(_:)`.
+    @ViewBuilder
+    func minisQuickLookPreview(_ url: Binding<URL?>) -> some View {
+        if #available(iOS 16.0, *) {
+            self.quickLookPreview(url)
+        } else {
+            self.sheet(item: Binding(
+                get: { url.wrappedValue.map(MinisQuickLookItem.init) },
+                set: { url.wrappedValue = $0?.url }
+            )) { item in
+                MinisQuickLookContainer(url: item.url)
+            }
+        }
+    }
+}
+
+public struct MinisQuickLookItem: Identifiable {
+    public let url: URL
+    public var id: String { url.absoluteString }
+    public init(_ url: URL) { self.url = url }
+}
+
+private struct MinisQuickLookContainer: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> QLPreviewController {
+        let controller = QLPreviewController()
+        controller.dataSource = context.coordinator
+        return controller
+    }
+
+    func updateUIViewController(_ controller: QLPreviewController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator { Coordinator(url: url) }
+
+    final class Coordinator: NSObject, QLPreviewControllerDataSource {
+        let url: URL
+        init(url: URL) { self.url = url }
+
+        func numberOfPreviewItems(in controller: QLPreviewController) -> Int { 1 }
+
+        func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem {
+            url as NSURL
+        }
     }
 }

@@ -3676,6 +3676,10 @@
 					WeatherKit,
 					"-weak_framework",
 					CoreTransferable,
+					"-weak_framework",
+					"_QuickLook_SwiftUI",
+					"-weak_framework",
+					Symbols,
 				);
 				OTHER_SWIFT_FLAGS = "";
 				PRODUCT_BUNDLE_IDENTIFIER = com.openminis.app;
@@ -3745,6 +3749,10 @@
 					WeatherKit,
 					"-weak_framework",
 					CoreTransferable,
+					"-weak_framework",
+					"_QuickLook_SwiftUI",
+					"-weak_framework",
+					Symbols,
 				);
 				OTHER_SWIFT_FLAGS = "";
 				PRODUCT_BUNDLE_IDENTIFIER = com.openminis.app;

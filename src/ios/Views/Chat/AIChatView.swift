@@ -1001,7 +1001,7 @@ struct AIChatView: View {
 
     private var bodyStage3: some View {
         bodyStage2
-        .quickLookPreview($previewDocumentFile)
+        .minisQuickLookPreview($previewDocumentFile)
         .sheet(item: $shareFile) { fileURL in
             MinisShareSheet(url: fileURL)
         }
