@@ -13,9 +13,30 @@ enum SharedContainerStore {
 
     /// Directory in the shared container for transferring attachment files.
     static var sharedFileDirectory: URL? {
-        FileManager.default
-            .containerURL(forSecurityApplicationGroupIdentifier: appGroupID)?
-            .appendingPathComponent("ShareExtension", isDirectory: true)
+        containerURL.appendingPathComponent("ShareExtension", isDirectory: true)
+    }
+
+    /// The App Group container, with a fallback for builds whose signature does
+    /// not carry the App Group entitlement.
+    ///
+    /// [T-ios-appgroup-optional] Unsigned builds that get re-signed on a device
+    /// (AltStore / Sideloadly / personal provisioning profiles) do not have
+    /// `com.apple.security.application-groups`, so
+    /// `containerURL(forSecurityApplicationGroupIdentifier:)` returns nil.
+    /// Callers used to force-unwrap it, which trapped at launch — the app
+    /// flashed the launch screen and quit. Falling back to a directory inside
+    /// the app's own container keeps the app usable; only the Files-app /
+    /// cross-process sharing degrades.
+    static var containerURL: URL {
+        let fm = FileManager.default
+        if let url = fm.containerURL(forSecurityApplicationGroupIdentifier: appGroupID) {
+            return url
+        }
+        let base = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? fm.temporaryDirectory
+        let fallback = base.appendingPathComponent("AppGroupFallback", isDirectory: true)
+        try? fm.createDirectory(at: fallback, withIntermediateDirectories: true)
+        return fallback
     }
 
     // MARK: - Write (called by Share Extension)

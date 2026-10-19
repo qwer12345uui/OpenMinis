@@ -237,6 +237,63 @@ jobs:
           print("LINKAGE_OK: no strong links to iOS 16+ frameworks")
           PY
 
+      - name: Normalise minimum-OS stamps on prebuilt binaries
+        if: success()
+        run: |
+          set -uo pipefail
+          # The RealTimeCutVAD SPM package declares .iOS(.v15) but its prebuilt
+          # binaryTarget (RealTimeCutVADCXXLibrary 1.0.3) is stamped with
+          # LC_BUILD_VERSION minos = 15.6.0. dyld on iOS 15.0-15.5 refuses to load
+          # a dylib built for a newer OS, so the app died on launch with
+          # "Library not loaded ... @rpath/RealTimeCutVADCXXLibrary" before any of
+          # our code ran. Rewrite the stamp down to 15.0 (the library only links
+          # Foundation/CoreML/libc++, all present since iOS 12) and re-sign that
+          # slice adhoc so the bundle stays internally consistent.
+          APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' | head -n 1)
+          test -n "$APP"
+          python3 scripts/patch_min_os.py "$APP" 15.0
+          VAD="$APP/Frameworks/RealTimeCutVADCXXLibrary.framework"
+          if [ -d "$VAD" ]; then
+            codesign --force --sign - --timestamp=none "$VAD" || true
+          fi
+          echo "--- minos sanity check"
+          python3 - "$APP" <<'PYEOF'
+          import os, struct, sys
+          app = sys.argv[1]
+          def minos_of(path):
+              with open(path, "rb") as fh:
+                  d = fh.read()
+              if len(d) < 32 or d[:4] not in (b"\xcf\xfa\xed\xfe", b"\xce\xfa\xed\xfe", b"\xca\xfe\xba\xbe"):
+                  return None
+              off = 0
+              if d[:4] == b"\xca\xfe\xba\xbe":
+                  n = struct.unpack_from(">I", d, 4)[0]
+                  off = struct.unpack_from(">I", d, 8 + 8)[0]
+                  d = d[off:]
+              ncmds = struct.unpack_from("<I", d, 16)[0]
+              p = 32
+              for _ in range(ncmds):
+                  cmd, cs = struct.unpack_from("<2I", d, p)
+                  if cmd == 0x32:
+                      v = struct.unpack_from("<I", d, p + 12)[0]
+                      return (v >> 16, (v >> 8) & 0xFF)
+                  p += cs
+              return None
+          worst = None
+          for root, _d, files in os.walk(app):
+              for f in files:
+                  fp = os.path.join(root, f)
+                  if os.path.islink(fp) or os.path.getsize(fp) < 4096:
+                      continue
+                  m = minos_of(fp)
+                  if m and (worst is None or m > worst):
+                      worst = m
+          print("highest minos in bundle:", worst)
+          if worst and worst > (15, 0):
+              sys.exit("MINOS_FAIL: something still needs iOS %s" % (worst,))
+          print("MINOS_OK")
+          PYEOF
+
       - name: Package unsigned IPA
         id: package
         if: success()
