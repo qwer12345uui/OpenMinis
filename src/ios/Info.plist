@@ -245,6 +245,8 @@
 		<string>location</string>
 		<string>remote-notification</string>
 	</array>
+	<key>UIFileSharingEnabled</key>
+	<true/>
 	<key>UTExportedTypeDeclarations</key>
 	<array>
 		<dict>

@@ -2,9 +2,97 @@ import SwiftUI
 import ObjectiveC
 import FileProvider
 import UserNotifications
+import Security
 
 private let shareLog = AppLogger(category: "Share")
 private let lifecycleLog = AppLogger(category: "Lifecycle")
+
+// MARK: - iOS 15 / sideload boot self-check
+
+/// [T-ios15-field-diag] A sideloaded iOS 15 build has no console attached and
+/// no crash reporter configured, so a failure during launch is invisible: the
+/// process either dies before the first frame or a screen renders empty and
+/// nothing records why. This writes a plain-text trace to
+/// `Documents/minis-boot.log`, which `UIFileSharingEnabled` exposes under
+/// Files → On My iPhone → Minis. One forwarded file pins the exact step that
+/// failed instead of another blind round of fixes.
+///
+/// Everything here is synchronous, allocation-light and dependency-free: it
+/// has to be safe as the very first statement of `MinisApp.init()`.
+enum BootDiag {
+    static var logURL: URL {
+        let fm = FileManager.default
+        let dir = fm.urls(for: .documentDirectory, in: .userDomainMask).first
+            ?? fm.temporaryDirectory
+        return dir.appendingPathComponent("minis-boot.log")
+    }
+
+    static func reset() {
+        let stamp = ISO8601DateFormatter().string(from: Date())
+        write("==== Minis iOS15 boot trace \(stamp) ====", appending: false)
+    }
+
+    static func mark(_ stage: String) {
+        write("▸ \(stage)")
+    }
+
+    static func note(_ key: String, _ value: String) {
+        write("    \(key): \(value)")
+    }
+
+    private static func write(_ line: String, appending: Bool = true) {
+        let url = logURL
+        let previous = appending ? ((try? String(contentsOf: url, encoding: .utf8)) ?? "") : ""
+        let ts = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .medium)
+        let text = previous + "[\(ts)] \(line)\n"
+        try? text.data(using: .utf8)?.write(to: url, options: .atomic)
+    }
+
+    /// Records the environment facts that decide whether the app can work at
+    /// all on this device: App Group entitled or not, Keychain writable or not,
+    /// app container writable or not. Runs before any subsystem is touched.
+    static func runSelfCheck() {
+        let fm = FileManager.default
+        let info = Bundle.main.infoDictionary ?? [:]
+        note("ios", ProcessInfo.processInfo.operatingSystemVersionString)
+        note("bundle", (info["CFBundleIdentifier"] as? String) ?? "?")
+        let shortVersion = (info["CFBundleShortVersionString"] as? String) ?? "?"
+        let buildNumber = (info["CFBundleVersion"] as? String) ?? "?"
+        note("version", shortVersion + " build " + buildNumber)
+        note("minimumOS", (info["MinimumOSVersion"] as? String) ?? "?")
+        note("container", Bundle.main.bundlePath)
+        note("documents writable", fm.isWritableFile(atPath: logURL.deletingLastPathComponent().path) ? "yes" : "NO")
+
+        if let group = fm.containerURL(forSecurityApplicationGroupIdentifier: "group.com.openminis.app") {
+            note("app group", group.path)
+        } else {
+            note("app group", "NOT ENTITLED (falling back to app container)")
+        }
+        note("resolved shared root", SharedContainerStore.containerURL.path)
+
+        let probe: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "com.openminis.bootdiag",
+            kSecAttrAccount as String: "probe"
+        ]
+        SecItemDelete(probe as CFDictionary)
+        var syncAdd = probe
+        syncAdd[kSecValueData as String] = Data("x".utf8)
+        syncAdd[kSecAttrSynchronizable as String] = true
+        note("keychain add (sync)", "OSStatus \(SecItemAdd(syncAdd as CFDictionary, nil))")
+        var localAdd = probe
+        localAdd[kSecValueData as String] = Data("x".utf8)
+        note("keychain add (local)", "OSStatus \(SecItemAdd(localAdd as CFDictionary, nil))")
+        SecItemDelete(probe as CFDictionary)
+
+        if let support = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+            note("app support", support.path)
+            note("app support writable", fm.isWritableFile(atPath: support.path) ? "yes" : "NO")
+        } else {
+            note("app support", "NIL")
+        }
+    }
+}
 
 // MARK: - Bundle Language Override
 
@@ -109,6 +197,11 @@ struct MinisApp: App {
     @State private var backgroundEntryDate: Date?
 
     init() {
+        // [T-ios15-field-diag] Trace the launch sequence before anything can
+        // trap, so a device-side failure leaves a name for the step it died in.
+        BootDiag.reset()
+        BootDiag.mark("init:enter")
+        BootDiag.runSelfCheck()
         // [T-ios-mac-uncaught-nsexception] FIRST statement in the process's own
         // code — before any subsystem gets a chance to throw.
         //
@@ -128,6 +221,7 @@ struct MinisApp: App {
         //
         // `install` is idempotent, so the later onAppLaunch() call is a no-op.
         CrashSignalHandler.install()
+        BootDiag.mark("init:crash-signal-handler")
         // [T-auto-grouping-default-on] Auto-grouping ships ON. `bool(forKey:)`
         // returns false for an unregistered key, so the default has to be
         // registered here rather than expressed at the (multiple) read sites —
@@ -155,6 +249,7 @@ struct MinisApp: App {
         Bundle.enableLanguageOverride()
         let lang = UserDefaults.standard.string(forKey: "appLanguage") ?? ""
         Bundle.setLanguage(lang.isEmpty ? nil : lang)
+        BootDiag.mark("init:language")
         // [T-ios-soul-name-sidebar-stale] Pre-load cachedMetadata synchronously so
         // ContentView's `@State soulName` gets the real SOUL.md name on its very
         // first render instead of the `.default` stub ("Minis"). Without this the
@@ -162,19 +257,24 @@ struct MinisApp: App {
         // .onAppear refresh) locks the sidebar title to the default even when the
         // user set a custom name. refreshCache() only reads the tiny SOUL.md file.
         SoulStore.refreshCache()
+        BootDiag.mark("init:soul-cache")
         // Pre-warm KaTeX WKWebView as fallback for formulas SwiftMath can't render
         KaTeXRenderer.shared.warmUp()
+        BootDiag.mark("init:katex-warmup")
         // Pre-warm the biometric capability probe off the main thread. The
         // first LAContext.canEvaluatePolicy call cold-starts the
         // LocalAuthentication XPC daemon (~500 ms); without this it would run
         // inline on the first sessionContextMenu builder during scroll and
         // hang a frame. (T-ios-biometric-probe-scroll-hang)
         BiometricAuth.prewarm()
+        BootDiag.mark("init:biometric")
         // Clean up Live Activities left over from a previous app session (e.g. app was killed)
         AgentLiveActivityManager.shared.cleanupStaleActivities(source: "MinisApp.init")
+        BootDiag.mark("init:live-activity")
         // Start screen-awake controller — it will observe running tasks
         // + the user's opt-in flag and toggle the idle timer accordingly.
         Task { @MainActor in KeepScreenAwakeController.shared.start() }
+        BootDiag.mark("init:done")
         // [T-zombie-child-sweep] Retire sub agent sessions whose parent
         // conversation was truncated away — see sweepZombieChildSessions for
         // why a month-old floor is what makes this safe against sync ordering.
