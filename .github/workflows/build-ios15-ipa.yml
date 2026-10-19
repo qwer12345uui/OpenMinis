@@ -13,7 +13,7 @@ on:
         default: "OpenMinis-unsigned-ipa"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -343,6 +343,43 @@ jobs:
           path: OpenMinis-unsigned.ipa
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish IPA to GitHub Releases
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # The IPA only ever existed as a workflow artifact, which is a
+          # temporary, login-walled download and is deleted after 30 days.
+          # Everything ships as a Release asset instead so there is a permanent
+          # URL on the repository page.
+          VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Payload/Minis.app/Info.plist 2>/dev/null || echo "0.0")
+          BUILD="${{ github.run_number }}"
+          TAG="ios15-v${VERSION}-b${BUILD}"
+          ASSET="OpenMinis-iOS15-unsigned.ipa"
+          cp OpenMinis-unsigned.ipa "$ASSET"
+          cat > release-notes.md <<EOF
+          iOS 15.0 unsigned build of OpenMinis.
+
+          | | |
+          |---|---|
+          | bundle id | \`com.openminis.app\` |
+          | version | ${VERSION} (build ${BUILD}) |
+          | minimum iOS | 15.0 |
+          | commit | \`${{ github.sha }}\` |
+          | branch | \`${{ github.ref_name }}\` |
+
+          The IPA is **unsigned**. Re-sign it with AltStore / Sideloadly (or your own
+          certificate) before installing. Do not drag the raw IPA onto the device.
+
+          Build report and full xcodebuild log are attached to the workflow run.
+          EOF
+          gh release create "$TAG" "$ASSET" \
+            --title "OpenMinis for iOS 15 — v${VERSION} (build ${BUILD})" \
+            --notes-file release-notes.md \
+            --target "${{ github.sha }}"
+          echo "::notice::Released $TAG"
 
       - name: Upload build report (always)
         if: always()

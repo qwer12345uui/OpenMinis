@@ -3328,6 +3328,42 @@ enum ProviderKeychainHelper {
         UserDefaults.standard.set(date, forKey: apiKeySavedAtUDKey(instanceId: instanceId))
     }
 
+    /// Writes a credential, preferring an iCloud-Keychain-synchronizable item.
+    ///
+    /// [T-ios15-sideload-keychain] `kSecAttrSynchronizable` is an entitlement
+    /// request. On a build re-signed on-device (AltStore / Sideloadly / a
+    /// personal profile) the keychain-access-group carried by the signature
+    /// does not match the group the item would land in, so `SecItemAdd` with
+    /// the flag set fails with errSecMissingEntitlement (-34018) or
+    /// errSecNotAvailable (-25291). The callers used to log that status and
+    /// move on, so every API key / OAuth token the user typed vanished on the
+    /// next launch: the provider list looked unconfigured, the model list came
+    /// back empty, and a chat with no model cannot be opened. Retrying without
+    /// the flag stores the same secret in the device-local keychain, which
+    /// needs no entitlement. Readers already fall back to the non-sync item
+    /// (loadAPIKey / loadOAuthToken / loadOAuthString try sync, then legacy;
+    /// loadRawOAuthToken queries kSecAttrSynchronizableAny).
+    @discardableResult
+    static func addCredentialItem(baseQuery: [String: Any], data: Data, caller: String = #function) -> OSStatus {
+        var syncQuery = baseQuery
+        syncQuery[kSecValueData as String] = data
+        syncQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        syncQuery[kSecAttrSynchronizable as String] = true
+        let syncStatus = SecItemAdd(syncQuery as CFDictionary, nil)
+        if syncStatus == errSecSuccess { return syncStatus }
+
+        var localQuery = baseQuery
+        localQuery[kSecValueData as String] = data
+        localQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        let localStatus = SecItemAdd(localQuery as CFDictionary, nil)
+        if localStatus == errSecSuccess {
+            AppLogger(category: "Keychain").warning("credential stored device-local; iCloud Keychain rejected the synchronizable add (status=\(syncStatus)) caller=\(caller)")
+        } else {
+            AppLogger(category: "Keychain").error("credential write FAILED sync=\(syncStatus) local=\(localStatus) caller=\(caller)")
+        }
+        return localStatus
+    }
+
     static func saveAPIKey(_ key: String, instanceId: String, caller: String = #function) {
         let service = "com.openminis.app.provider.\(instanceId)"
         // Delete both legacy (non-sync) and synchronizable entries
@@ -3341,11 +3377,7 @@ enum ProviderKeychainHelper {
         syncDelete[kSecAttrSynchronizable as String] = true
         SecItemDelete(syncDelete as CFDictionary)
         // Save with iCloud Keychain sync enabled
-        var addQuery = deleteQuery
-        addQuery[kSecValueData as String] = Data(key.utf8)
-        addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-        addQuery[kSecAttrSynchronizable as String] = true
-        let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+        let addStatus = Self.addCredentialItem(baseQuery: deleteQuery, data: Data(key.utf8), caller: caller)
         // Stamp the local save time for iCloud LWW conflict resolution.
         stampAPIKeySavedAt(Date(), instanceId: instanceId)
         AppLogger(category: "Keychain").info("write apiKey instanceId=\(instanceId.prefix(8)) keyLen=\(key.count) addStatus=\(addStatus) caller=\(caller)")
@@ -3459,11 +3491,7 @@ enum ProviderKeychainHelper {
         var syncDelete = deleteQuery
         syncDelete[kSecAttrSynchronizable as String] = true
         SecItemDelete(syncDelete as CFDictionary)
-        var addQuery = deleteQuery
-        addQuery[kSecValueData as String] = data
-        addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-        addQuery[kSecAttrSynchronizable as String] = true
-        let status = SecItemAdd(addQuery as CFDictionary, nil)
+        let status = Self.addCredentialItem(baseQuery: deleteQuery, data: data)
         if status != errSecSuccess {
             AppLogger(category: "Keychain").warning("write rawOAuthToken instanceId=\(instanceId.prefix(8)) status=\(status)")
         }
@@ -3501,11 +3529,7 @@ enum ProviderKeychainHelper {
         var syncDelete = deleteQuery
         syncDelete[kSecAttrSynchronizable as String] = true
         SecItemDelete(syncDelete as CFDictionary)
-        var addQuery = deleteQuery
-        addQuery[kSecValueData as String] = data
-        addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-        addQuery[kSecAttrSynchronizable as String] = true
-        let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+        let addStatus = Self.addCredentialItem(baseQuery: deleteQuery, data: data, caller: caller)
         AppLogger(category: "Keychain").info("write oauthToken instanceId=\(instanceId.prefix(8)) blobLen=\(data.count) addStatus=\(addStatus) caller=\(caller)")
         clearOAuthNeedsReauth(instanceId: instanceId)
         notifyAuthChanged(instanceId: instanceId)
@@ -3633,11 +3657,7 @@ enum ProviderKeychainHelper {
         var syncDelete = deleteQuery
         syncDelete[kSecAttrSynchronizable as String] = true
         SecItemDelete(syncDelete as CFDictionary)
-        var addQuery = deleteQuery
-        addQuery[kSecValueData as String] = Data(value.utf8)
-        addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-        addQuery[kSecAttrSynchronizable as String] = true
-        let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+        let addStatus = Self.addCredentialItem(baseQuery: deleteQuery, data: Data(value.utf8), caller: caller)
         AppLogger(category: "Keychain").info("write oauthString instanceId=\(instanceId.prefix(8)) acct=\(account) valLen=\(value.count) addStatus=\(addStatus) caller=\(caller)")
         notifyAuthChanged(instanceId: instanceId)
     }
