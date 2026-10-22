@@ -233,15 +233,37 @@ public struct NavigationStack<Content: View>: View {
 
     public var body: some View {
         NavigationView {
-            content
-                .background(BackportNavSync(router: router))
-                .background(BackportNavChain())
-                .environment(\.backportNavRouter, router)
-                .environmentObject(router)
-                .onPreferenceChange(BackportDestinationsKey.self) { router.destinations = $0 }
-                .onChange(of: pathBinding?.wrappedValue ?? ownedPath) { newPath in
-                    router.pathChangedExternally(newPath)
-                }
+            // [T-ios15-navchain-must-be-laid-out] The hidden isActive link chain
+            // and the sync probe used to live in `.background(...)`, with a 0x0
+            // label. On iOS 15 `NavigationView` only honours a programmatic
+            // `NavigationLink(isActive:)` that is part of the *laid-out* content
+            // it manages: a zero-sized link buried in a background is not
+            // resolved, so `isActive` flipping to true pushed nothing. Every
+            // value-based route in the app therefore looked dead — tapping a
+            // session did nothing, the model-selection page never opened, and the
+            // model-group detail page could not be entered — while plain
+            // `NavigationLink { destination }` rows kept working, which is what
+            // made this look like four unrelated bugs instead of one.
+            //
+            // Both helpers are now ZStack siblings of the content (a real layout
+            // participant) and the link gets a 1x1 non-degenerate frame. The
+            // stack's own size still comes from `content`, so nothing moves on
+            // screen.
+            ZStack(alignment: .topLeading) {
+                content
+                BackportNavChain()
+                    .frame(width: 1, height: 1)
+                    .allowsHitTesting(false)
+                BackportNavSync(router: router)
+                    .frame(width: 1, height: 1)
+                    .allowsHitTesting(false)
+            }
+            .environment(\.backportNavRouter, router)
+            .environmentObject(router)
+            .onPreferenceChange(BackportDestinationsKey.self) { router.destinations = $0 }
+            .onChange(of: pathBinding?.wrappedValue ?? ownedPath) { newPath in
+                router.pathChangedExternally(newPath)
+            }
         }
         .navigationViewStyle(.stack)
         .onAppear {
@@ -286,7 +308,9 @@ struct BackportNavChainLevel: View {
                     BackportNavChainLevel(router: router, depth: depth + 1)
                 }
             } label: {
-                Color.clear.frame(width: 0, height: 0).accessibilityHidden(true)
+                // 1x1, not 0x0: a zero-area NavigationLink is not resolved by
+                // iOS 15's NavigationView and its isActive binding is ignored.
+                Color.clear.frame(width: 1, height: 1).accessibilityHidden(true)
             }
             .buttonStyle(.plain)
         }
@@ -364,9 +388,7 @@ struct BackportNavSync: UIViewRepresentable {
 
     func updateUIView(_ view: SyncView, context: Context) {
         view.router = router
-        if view.navigationController == nil || view.navigationController?.delegate == nil {
-            attachIfPossible(view)
-        }
+        ensureAttached(view)
         // Initial reconcile in case the path was written before attach.
         DispatchQueue.main.async { [weak view] in
             guard let view, let nav = view.navigationController else { return }
@@ -374,8 +396,45 @@ struct BackportNavSync: UIViewRepresentable {
         }
     }
 
+    /// Point the sync at the enclosing UINavigationController and keep the
+    /// delegate slot ours.
+    ///
+    /// [T-ios15-nav-delegate-stolen] SwiftUI's `NavigationView` re-assigns the
+    /// navigation delegate during its own transactions (a native push, a pop,
+    /// a rotation). The first version attached exactly once — `guard view.proxy
+    /// == nil` — so after that re-assignment pops stopped being observed,
+    /// `router.depth` kept its old value, `isActive` stayed `true`, and every
+    /// later push to that depth was silently dropped. The visible symptom was
+    /// "the first screen opens, then nothing opens again", which is also why the
+    /// model-selection page and the group detail page looked independently
+    /// broken.
+    private func ensureAttached(_ view: SyncView) {
+        if view.navigationController == nil {
+            attachIfPossible(view)
+            return
+        }
+        guard let nav = view.navigationController else { return }
+
+        let proxy: BackportNavDelegateProxy
+        if let existing = view.proxy {
+            proxy = existing
+        } else {
+            proxy = BackportNavDelegateProxy()
+            proxy.onDidShow = { [weak view] navController, _ in
+                guard let view else { return }
+                view.router?.reconcile(actualDepth: navController.viewControllers.count - 1)
+            }
+            view.proxy = proxy
+        }
+
+        if let current = nav.delegate, (current as AnyObject) === proxy { return }
+        // Whatever holds the slot now becomes the forwardee; never forward to
+        // ourselves (that would recurse).
+        proxy.original = nav.delegate
+        nav.delegate = proxy
+    }
+
     private func attachIfPossible(_ view: SyncView) {
-        guard view.proxy == nil else { return }
         // Walk the responder chain to the nearest view controller, then use
         // its navigationController.
         var responder: UIResponder? = view
@@ -388,15 +447,8 @@ struct BackportNavSync: UIViewRepresentable {
             responder = r.next
         }
         guard let nav = hostingVC?.navigationController else { return }
-        let proxy = BackportNavDelegateProxy()
-        proxy.original = nav.delegate
-        proxy.onDidShow = { [weak view] navController, _ in
-            guard let view else { return }
-            view.router?.reconcile(actualDepth: navController.viewControllers.count - 1)
-        }
-        nav.delegate = proxy
-        view.proxy = proxy
         view.navigationController = nav
+        ensureAttached(view)
     }
 }
 
@@ -459,11 +511,23 @@ public struct NavigationLink<D: View, Label: View>: View {
         if let router {
             if isEmptyLabel {
                 // Invisible tap target (the classic hidden-NavigationLink
-                // overlay/background pattern): fills offered space, no chrome.
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onTapGesture { router.push(value) }
-                    .accessibilityHidden(true)
+                // overlay/background pattern): fills the offered space, no chrome.
+                //
+                // [T-ios15-list-swallows-tap] This used to be
+                // `Color.clear.contentShape(...).onTapGesture { push }`. A bare
+                // tap gesture loses to the enclosing List row's own recogniser on
+                // iOS 15, so a session row — whose ONLY tap target is this
+                // background layer — did nothing when tapped: the chat never
+                // opened. A real Button takes part in the row's hit testing and
+                // is the form List has always handled reliably.
+                Button {
+                    router.push(value)
+                } label: {
+                    Color.clear
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHidden(true)
             } else {
                 Button {
                     router.push(value)
